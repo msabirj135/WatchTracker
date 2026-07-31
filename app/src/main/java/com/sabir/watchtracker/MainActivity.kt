@@ -2,7 +2,6 @@
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
@@ -84,20 +83,6 @@ private fun WatchTrackerApp(
         mutableStateOf<LibraryItem?>(null)
     }
 
-    BackHandler(
-        enabled = selectedLibraryItem != null || searchIsOpen
-    ) {
-        when {
-            selectedLibraryItem != null -> {
-                selectedLibraryItem = null
-            }
-
-            searchIsOpen -> {
-                searchIsOpen = false
-            }
-        }
-    }
-
     val navigationItems = listOf(
         NavigationItem("Home", "⌂"),
         NavigationItem("Movies", "▶"),
@@ -155,8 +140,10 @@ private fun WatchTrackerApp(
                                     indicatorColor = AppPrimary.copy(
                                         alpha = 0.14f
                                     ),
-                                    unselectedIconColor = AppTextSecondary,
-                                    unselectedTextColor = AppTextSecondary
+                                    unselectedIconColor =
+                                        AppTextSecondary,
+                                    unselectedTextColor =
+                                        AppTextSecondary
                                 )
                             )
                         }
@@ -170,6 +157,9 @@ private fun WatchTrackerApp(
                             libraryUiState = libraryUiState,
                             onSearchClick = {
                                 searchIsOpen = true
+                            },
+                            onItemClick = { item ->
+                                selectedLibraryItem = item
                             }
                         )
                     }
@@ -215,3 +205,4 @@ private fun WatchTrackerApp(
         }
     }
 }
+
