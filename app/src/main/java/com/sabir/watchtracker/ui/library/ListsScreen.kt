@@ -338,9 +338,15 @@ private fun MonthlyPosterCard(entry: MonthlyGridEntry, onClick: () -> Unit) {
                 modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f),
                 contentScale = ContentScale.Crop
             )
-            Column(modifier = Modifier.padding(8.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(106.dp)
+                    .padding(8.dp)
+            ) {
                 Text(
                     item.title,
+                    modifier = Modifier.height(28.dp),
                     color = ListsText,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
@@ -359,16 +365,36 @@ private fun MonthlyPosterCard(entry: MonthlyGridEntry, onClick: () -> Unit) {
                     fontSize = 9.sp,
                     fontWeight = FontWeight.SemiBold
                 )
-                if (item.mediaType == "tv") {
-                    Text(
-                        "${entry.episodes.size} this month • ${entry.item.totalEpisodes?.let { "${entry.overallWatchedEpisodes}/$it overall" } ?: "${entry.overallWatchedEpisodes} overall"}",
-                        color = ListsMuted,
-                        fontSize = 8.sp,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                Text(formatMinutes(entry.totalMinutes), color = ListsMuted, fontSize = 8.sp)
+                Text(
+                    if (item.mediaType == "tv") {
+                        "${entry.episodes.size} this month"
+                    } else {
+                        "Watched"
+                    },
+                    color = ListsMuted,
+                    fontSize = 8.sp,
+                    maxLines = 1
+                )
+                Text(
+                    if (item.mediaType == "tv") {
+                        item.totalEpisodes?.let {
+                            "${entry.overallWatchedEpisodes}/$it overall"
+                        } ?: "${entry.overallWatchedEpisodes} overall"
+                    } else {
+                        formatEpochDayForLists(entry.watchedDateEpochDay)
+                    },
+                    color = ListsMuted,
+                    fontSize = 8.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                Text(
+                    formatMinutes(entry.totalMinutes),
+                    color = ListsMuted,
+                    fontSize = 8.sp,
+                    maxLines = 1
+                )
             }
         }
     }
