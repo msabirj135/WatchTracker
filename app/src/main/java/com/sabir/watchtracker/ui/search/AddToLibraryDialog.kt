@@ -1,4 +1,4 @@
-﻿package com.sabir.watchtracker.ui.search
+package com.sabir.watchtracker.ui.search
 
 import android.app.DatePickerDialog
 import androidx.compose.foundation.background
@@ -248,6 +248,7 @@ fun AddToLibraryDialog(
                             when (status) {
                                 LibraryStatus.PLAN_TO_WATCH -> {
                                     watchDateEpochDay = null
+                                    personalRatingText = ""
                                     selectedEpisodeNumber = 0
                                 }
 
@@ -350,6 +351,7 @@ fun AddToLibraryDialog(
                         )
                     }
 
+                    if (selectedStatus != LibraryStatus.PLAN_TO_WATCH) {
                     Spacer(modifier = Modifier.height(24.dp))
 
                     FormLabel(
@@ -435,6 +437,7 @@ fun AddToLibraryDialog(
                         shape = RoundedCornerShape(14.dp),
                         colors = dialogTextFieldColors()
                     )
+                    }
 
                     Spacer(modifier = Modifier.height(18.dp))
 
@@ -504,8 +507,8 @@ fun AddToLibraryDialog(
                             onClick = {
                                 onSave(
                                     selectedStatus,
-                                    watchDateEpochDay,
-                                    parsedPersonalRating,
+                                    if (selectedStatus == LibraryStatus.PLAN_TO_WATCH) null else watchDateEpochDay,
+                                    if (selectedStatus == LibraryStatus.PLAN_TO_WATCH) null else parsedPersonalRating,
                                     notes,
                                     selectedEpisode
                                 )
@@ -735,7 +738,9 @@ private fun StatusSelector(
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        LibraryStatus.entries.forEach { status ->
+        LibraryStatus.entries
+            .filter { status -> status != LibraryStatus.DROPPED }
+            .forEach { status ->
             FilterChip(
                 selected = selectedStatus == status,
                 onClick = {
