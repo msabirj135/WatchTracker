@@ -763,6 +763,7 @@ fun LibraryScreen(
     title: String,
     items: List<LibraryItem>,
     isLoading: Boolean,
+    onBackClick: () -> Unit,
     onAddClick: () -> Unit,
     onItemClick: (LibraryItem) -> Unit
 ) {
@@ -786,6 +787,20 @@ fun LibraryScreen(
                 verticalAlignment =
                     Alignment.CenterVertically
             ) {
+                Button(
+                    onClick = onBackClick,
+                    modifier = Modifier.size(44.dp),
+                    contentPadding = PaddingValues(0.dp),
+                    shape = RoundedCornerShape(13.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = ScreenSurfaceLight
+                    )
+                ) {
+                    Text("←", fontSize = 20.sp)
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
                 Column(
                     modifier = Modifier.weight(1f)
                 ) {
@@ -1128,7 +1143,8 @@ private fun EmptyLibraryCard(
 @Composable
 fun StatisticsScreen(
     paddingValues: PaddingValues,
-    libraryUiState: LibraryUiState
+    libraryUiState: LibraryUiState,
+    onBackClick: () -> Unit
 ) {
     LazyColumn(
         modifier = Modifier
@@ -1145,18 +1161,29 @@ fun StatisticsScreen(
             Arrangement.spacedBy(14.dp)
     ) {
         item {
-            Text(
-                text = "Statistics",
-                color = ScreenTextPrimary,
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold
-            )
-
-            Text(
-                text = "Your viewing activity at a glance",
-                color = ScreenTextSecondary,
-                fontSize = 14.sp
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Button(
+                    onClick = onBackClick,
+                    modifier = Modifier.size(44.dp),
+                    contentPadding = PaddingValues(0.dp),
+                    shape = RoundedCornerShape(13.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ScreenSurfaceLight)
+                ) { Text("←", fontSize = 20.sp) }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(
+                        text = "Statistics",
+                        color = ScreenTextPrimary,
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Your viewing activity at a glance",
+                        color = ScreenTextSecondary,
+                        fontSize = 14.sp
+                    )
+                }
+            }
 
             Spacer(
                 modifier = Modifier.height(14.dp)
