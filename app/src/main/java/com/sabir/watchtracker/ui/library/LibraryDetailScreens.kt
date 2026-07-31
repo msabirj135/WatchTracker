@@ -2,6 +2,7 @@ package com.sabir.watchtracker.ui.library
 
 import android.app.DatePickerDialog
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -175,7 +177,8 @@ private fun TvShowDetailScreen(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(DetailBackground),
+            .background(DetailBackground)
+            .statusBarsPadding(),
         contentPadding = PaddingValues(
             start = 20.dp,
             top = 18.dp,
@@ -187,13 +190,16 @@ private fun TvShowDetailScreen(
         item {
             DetailHeader(
                 title = "TV Show",
-                onBackClick = onBackClick,
-                onDeleteClick = onDeleteClick
+                onBackClick = onBackClick
             )
         }
 
         item {
             TitleOverviewCard(item)
+        }
+
+        item {
+            RemoveFromLibraryButton(onClick = onDeleteClick)
         }
 
         item {
@@ -334,7 +340,8 @@ private fun MovieDetailScreen(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(DetailBackground),
+            .background(DetailBackground)
+            .statusBarsPadding(),
         contentPadding = PaddingValues(
             start = 20.dp,
             top = 18.dp,
@@ -346,13 +353,16 @@ private fun MovieDetailScreen(
         item {
             DetailHeader(
                 title = "Movie",
-                onBackClick = onBackClick,
-                onDeleteClick = onDeleteClick
+                onBackClick = onBackClick
             )
         }
 
         item {
             TitleOverviewCard(item)
+        }
+
+        item {
+            RemoveFromLibraryButton(onClick = onDeleteClick)
         }
 
         item {
@@ -474,22 +484,23 @@ private fun MovieDetailScreen(
 @Composable
 private fun DetailHeader(
     title: String,
-    onBackClick: () -> Unit,
-    onDeleteClick: () -> Unit
+    onBackClick: () -> Unit
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onBackClick)
+            .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Button(
-            onClick = onBackClick,
-            modifier = Modifier.size(48.dp),
-            contentPadding = PaddingValues(0.dp),
-            shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = DetailSurfaceLight,
-                contentColor = DetailTextPrimary
-            )
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .background(
+                    color = DetailSurfaceLight,
+                    shape = RoundedCornerShape(14.dp)
+                ),
+            contentAlignment = Alignment.Center
         ) {
             Text(
                 text = "←",
@@ -510,15 +521,23 @@ private fun DetailHeader(
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold
         )
+    }
+}
 
-        TextButton(onClick = onDeleteClick) {
-            Text(
-                text = "Remove",
-                color = DetailPrimary,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
+@Composable
+private fun RemoveFromLibraryButton(
+    onClick: () -> Unit
+) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(13.dp)
+    ) {
+        Text(
+            text = "Remove from library",
+            color = DetailPrimary,
+            fontWeight = FontWeight.Bold
+        )
     }
 }
 
