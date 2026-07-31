@@ -280,7 +280,7 @@ private fun MonthCard(month: MonthlyWatchList, onClick: (MonthlyWatchList) -> Un
             Column(Modifier.weight(1f)) {
                 Text(month.label, color = ListsText, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 Text(
-                    "${month.entries.size} titles • ${month.activityCount} watched • ${formatMinutes(month.totalMinutes)}",
+                    "${month.movieCount} movies • ${month.tvShowCount} TV shows • ${formatMinutes(month.totalMinutes)}",
                     color = ListsMuted,
                     fontSize = 12.sp
                 )
@@ -341,7 +341,7 @@ private fun MonthlyPosterCard(entry: MonthlyGridEntry, onClick: () -> Unit) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(76.dp)
+                    .height(92.dp)
                     .padding(8.dp)
             ) {
                 Text(
