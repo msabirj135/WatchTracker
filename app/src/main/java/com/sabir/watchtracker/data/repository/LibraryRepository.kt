@@ -2,6 +2,8 @@ package com.sabir.watchtracker.data.repository
 
 import android.content.Context
 import com.sabir.watchtracker.data.local.EpisodeWatch
+import com.sabir.watchtracker.data.local.CustomList
+import com.sabir.watchtracker.data.local.CustomListItem
 import com.sabir.watchtracker.data.local.LibraryItem
 import com.sabir.watchtracker.data.local.LibraryStatus
 import com.sabir.watchtracker.data.local.WatchTrackerDatabase
@@ -20,6 +22,60 @@ class LibraryRepository(
 
     private val episodeWatchDao =
         database.episodeWatchDao()
+
+    private val customListDao = database.customListDao()
+
+    fun observeCustomLists(): Flow<List<CustomList>> =
+        customListDao.observeLists()
+
+    fun observeCustomListItems(): Flow<List<CustomListItem>> =
+        customListDao.observeItems()
+
+    suspend fun createCustomList(name: String, description: String) {
+        val normalizedName = name.trim()
+        if (normalizedName.isBlank()) return
+        val now = System.currentTimeMillis()
+        customListDao.upsertList(
+            CustomList(
+                name = normalizedName,
+                description = description.trim(),
+                createdAt = now,
+                updatedAt = now
+            )
+        )
+    }
+
+    suspend fun updateCustomList(list: CustomList, name: String, description: String) {
+        val normalizedName = name.trim()
+        if (normalizedName.isBlank()) return
+        customListDao.upsertList(
+            list.copy(
+                name = normalizedName,
+                description = description.trim(),
+                updatedAt = System.currentTimeMillis()
+            )
+        )
+    }
+
+    suspend fun addToCustomList(listId: Long, item: LibraryItem) {
+        customListDao.upsertItem(
+            CustomListItem(
+                listId = listId,
+                tmdbId = item.tmdbId,
+                mediaType = item.mediaType,
+                addedAt = System.currentTimeMillis()
+            )
+        )
+    }
+
+    suspend fun removeFromCustomList(listId: Long, item: LibraryItem) {
+        customListDao.removeItem(listId, item.tmdbId, item.mediaType)
+    }
+
+    suspend fun deleteCustomList(listId: Long) {
+        customListDao.deleteItems(listId)
+        customListDao.deleteList(listId)
+    }
 
     fun observeAll(): Flow<List<LibraryItem>> {
         return libraryItemDao.observeAll()
