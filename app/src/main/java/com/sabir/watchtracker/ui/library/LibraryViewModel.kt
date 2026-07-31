@@ -72,14 +72,22 @@ data class LibraryUiState(
     val errorMessage: String? = null
 ) {
     val movies: List<LibraryItem>
-        get() = items.filter { item ->
-            item.mediaType == "movie"
-        }
+        get() = items
+            .filter { item -> item.mediaType == "movie" }
+            .sortedWith(latestWatchedFirst())
 
     val tvShows: List<LibraryItem>
-        get() = items.filter { item ->
-            item.mediaType == "tv"
+        get() = items
+            .filter { item -> item.mediaType == "tv" }
+            .sortedWith(latestWatchedFirst())
+
+    private fun latestWatchedFirst(): Comparator<LibraryItem> {
+        return compareByDescending<LibraryItem> { item ->
+            item.watchDateEpochDay ?: Long.MIN_VALUE
+        }.thenByDescending { item ->
+            item.updatedAt
         }
+    }
 
     val planToWatch: List<LibraryItem>
         get() = items.filter { item ->
