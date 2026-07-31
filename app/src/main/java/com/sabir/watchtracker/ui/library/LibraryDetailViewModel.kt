@@ -207,6 +207,33 @@ class LibraryDetailViewModel(
         )
     }
 
+    fun markSeriesCompleted() {
+        val state = uiState.value
+        val show = state.item ?: return
+        val remainingEpisodes = state.allEpisodes.filter { episode ->
+            (episode.seasonNumber to episode.episodeNumber) !in
+                state.watchedEpisodeKeys
+        }
+
+        viewModelScope.launch {
+            setSaving(true)
+            try {
+                libraryRepository.markSeriesCompleted(
+                    show = show,
+                    remainingEpisodes = remainingEpisodes,
+                    watchedDateEpochDay = LocalDate.now().toEpochDay()
+                )
+                refreshItem()
+                setSaving(false)
+            } catch (exception: Exception) {
+                setError(
+                    exception.message
+                        ?: "Unable to mark this series completed."
+                )
+            }
+        }
+    }
+
     fun unmarkEpisodeWatched(
         episode: TmdbEpisode
     ) {
