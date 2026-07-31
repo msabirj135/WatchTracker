@@ -2,6 +2,7 @@
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
@@ -81,6 +82,26 @@ private fun WatchTrackerApp(
 
     var selectedLibraryItem by remember {
         mutableStateOf<LibraryItem?>(null)
+    }
+
+    BackHandler(
+        enabled = selectedLibraryItem != null ||
+            searchIsOpen ||
+            selectedTab != 0
+    ) {
+        when {
+            selectedLibraryItem != null -> {
+                selectedLibraryItem = null
+            }
+
+            searchIsOpen -> {
+                searchIsOpen = false
+            }
+
+            selectedTab != 0 -> {
+                selectedTab = 0
+            }
+        }
     }
 
     val navigationItems = listOf(
