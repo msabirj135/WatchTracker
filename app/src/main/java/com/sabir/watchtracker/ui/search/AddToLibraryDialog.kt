@@ -16,7 +16,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -40,7 +39,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -51,6 +49,7 @@ import com.sabir.watchtracker.data.remote.TmdbEpisode
 import com.sabir.watchtracker.data.remote.TmdbSearchResult
 import com.sabir.watchtracker.data.remote.TmdbSeasonDetails
 import com.sabir.watchtracker.data.remote.TmdbTvDetails
+import com.sabir.watchtracker.ui.components.StarRatingSelector
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -89,8 +88,8 @@ fun AddToLibraryDialog(
         mutableStateOf<Long?>(null)
     }
 
-    var personalRatingText by remember(result.id) {
-        mutableStateOf("")
+    var personalRating by remember(result.id) {
+        mutableStateOf<Double?>(null)
     }
 
     var notes by remember(result.id) {
@@ -113,19 +112,6 @@ fun AddToLibraryDialog(
             episode.episodeNumber ==
                 selectedEpisodeNumber
         }
-
-    val parsedPersonalRating = personalRatingText
-        .trim()
-        .replace(",", ".")
-        .takeIf { it.isNotEmpty() }
-        ?.toDoubleOrNull()
-
-    val ratingIsValid =
-        personalRatingText.isBlank() ||
-            (
-                parsedPersonalRating != null &&
-                    parsedPersonalRating in 0.0..10.0
-                )
 
     val episodeIsRequired =
         isTvShow &&
@@ -248,7 +234,7 @@ fun AddToLibraryDialog(
                             when (status) {
                                 LibraryStatus.PLAN_TO_WATCH -> {
                                     watchDateEpochDay = null
-                                    personalRatingText = ""
+                                    personalRating = null
                                     selectedEpisodeNumber = 0
                                 }
 
@@ -398,44 +384,10 @@ fun AddToLibraryDialog(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    OutlinedTextField(
-                        value = personalRatingText,
-                        onValueChange = { value ->
-                            if (
-                                value.length <= 4 &&
-                                value.all { character ->
-                                    character.isDigit() ||
-                                        character == '.' ||
-                                        character == ','
-                                }
-                            ) {
-                                personalRatingText = value
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = {
-                            Text("Optional rating from 0 to 10")
-                        },
-                        suffix = {
-                            Text(
-                                text = "/ 10",
-                                color = DialogTextSecondary
-                            )
-                        },
-                        singleLine = true,
-                        isError = !ratingIsValid,
-                        supportingText = {
-                            if (!ratingIsValid) {
-                                Text(
-                                    "Enter a number between 0 and 10."
-                                )
-                            }
-                        },
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Decimal
-                        ),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = dialogTextFieldColors()
+                    StarRatingSelector(
+                        rating = personalRating,
+                        onRatingChange = { personalRating = it },
+                        enabled = !isSaving
                     )
                     }
 
@@ -508,15 +460,14 @@ fun AddToLibraryDialog(
                                 onSave(
                                     selectedStatus,
                                     if (selectedStatus == LibraryStatus.PLAN_TO_WATCH) null else watchDateEpochDay,
-                                    if (selectedStatus == LibraryStatus.PLAN_TO_WATCH) null else parsedPersonalRating,
+                                    if (selectedStatus == LibraryStatus.PLAN_TO_WATCH) null else personalRating,
                                     notes,
                                     selectedEpisode
                                 )
                             },
                             modifier = Modifier.weight(1f),
                             enabled =
-                                ratingIsValid &&
-                                    episodeSelectionIsValid &&
+                                episodeSelectionIsValid &&
                                     dateSelectionIsValid &&
                                     !isSaving &&
                                     !isLoadingTvDetails &&
