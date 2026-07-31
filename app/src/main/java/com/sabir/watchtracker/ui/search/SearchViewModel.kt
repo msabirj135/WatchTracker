@@ -1,4 +1,4 @@
-﻿package com.sabir.watchtracker.ui.search
+package com.sabir.watchtracker.ui.search
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
@@ -256,6 +256,14 @@ class SearchViewModel(
 
         saveJob = coroutineScope.launch {
             try {
+                val movieRuntime = if (result.mediaType == "movie") {
+                    tmdbRepository
+                        .getMovieDetails(result.id)
+                        .runtime
+                } else {
+                    null
+                }
+
                 libraryRepository.saveSearchResult(
                     result = result,
                     status = status,
@@ -273,7 +281,8 @@ class SearchViewModel(
                     totalEpisodes =
                         uiState.value
                             .tvDetails
-                            ?.numberOfEpisodes
+                            ?.numberOfEpisodes,
+                    runtimeMinutes = movieRuntime
                 )
 
                 if (
