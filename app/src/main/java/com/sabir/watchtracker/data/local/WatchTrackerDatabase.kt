@@ -11,9 +11,11 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 @Database(
     entities = [
         LibraryItem::class,
-        EpisodeWatch::class
+        EpisodeWatch::class,
+        CustomList::class,
+        CustomListItem::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 @TypeConverters(
@@ -24,6 +26,8 @@ abstract class WatchTrackerDatabase : RoomDatabase() {
     abstract fun libraryItemDao(): LibraryItemDao
 
     abstract fun episodeWatchDao(): EpisodeWatchDao
+
+    abstract fun customListDao(): CustomListDao
 
     companion object {
 
@@ -82,6 +86,17 @@ abstract class WatchTrackerDatabase : RoomDatabase() {
             }
         }
 
+        private val migration3To4 = object : Migration(3, 4) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "CREATE TABLE IF NOT EXISTS custom_lists (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, name TEXT NOT NULL, description TEXT NOT NULL, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL)"
+                )
+                database.execSQL(
+                    "CREATE TABLE IF NOT EXISTS custom_list_items (listId INTEGER NOT NULL, tmdbId INTEGER NOT NULL, mediaType TEXT NOT NULL, addedAt INTEGER NOT NULL, PRIMARY KEY(listId, tmdbId, mediaType))"
+                )
+            }
+        }
+
         @Volatile
         private var instance: WatchTrackerDatabase? = null
 
@@ -96,7 +111,8 @@ abstract class WatchTrackerDatabase : RoomDatabase() {
                 )
                     .addMigrations(
                         migration1To2,
-                        migration2To3
+                        migration2To3,
+                        migration3To4
                     )
                     .build()
                     .also { database ->
