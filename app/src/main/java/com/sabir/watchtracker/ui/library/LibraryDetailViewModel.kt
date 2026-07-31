@@ -258,6 +258,27 @@ class LibraryDetailViewModel(
         }
     }
 
+    fun updatePersonalRating(rating: Double?) {
+        val item = uiState.value.item ?: return
+
+        viewModelScope.launch {
+            setSaving(true)
+
+            try {
+                libraryRepository.updateItem(
+                    item.copy(personalRating = rating)
+                )
+                refreshItem()
+                setSaving(false)
+            } catch (exception: Exception) {
+                setError(
+                    exception.message
+                        ?: "Unable to update your rating."
+                )
+            }
+        }
+    }
+
     private suspend fun refreshItem() {
         val currentItem = uiState.value.item ?: return
 
