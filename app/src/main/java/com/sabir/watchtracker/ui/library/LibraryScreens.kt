@@ -274,8 +274,9 @@ private fun HomeSummary(
 
         SummaryCard(
             modifier = Modifier.weight(1f),
-            value = formatWatchTime(totalWatchMinutes),
-            label = "Watch time"
+            value = formatHomeWatchTime(totalWatchMinutes),
+            label = "Watch time",
+            valueFontSize = 18
         )
     }
 }
@@ -284,7 +285,8 @@ private fun HomeSummary(
 private fun SummaryCard(
     modifier: Modifier,
     value: String,
-    label: String
+    label: String,
+    valueFontSize: Int = 24
 ) {
     Card(
         modifier = modifier,
@@ -302,9 +304,13 @@ private fun SummaryCard(
         ) {
             Text(
                 text = value,
+                modifier = Modifier.height(44.dp),
                 color = ScreenTextPrimary,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold
+                fontSize = valueFontSize.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                lineHeight = 20.sp,
+                maxLines = 2
             )
 
             Spacer(
@@ -1528,6 +1534,21 @@ private fun formatWatchTime(totalMinutes: Int): String {
         if (hours > 0) add("${hours}h")
         if (minutes > 0 || isEmpty()) add("${minutes}m")
     }.joinToString(" ")
+}
+
+private fun formatHomeWatchTime(totalMinutes: Int): String {
+    if (totalMinutes <= 0) return "0m"
+    val days = totalMinutes / (24 * 60)
+    val hours = (totalMinutes % (24 * 60)) / 60
+    val minutes = totalMinutes % 60
+
+    return when {
+        days > 0 && minutes > 0 -> "${days}d ${hours}h\n${minutes}m"
+        days > 0 -> "${days}d ${hours}h"
+        hours > 0 && minutes > 0 -> "${hours}h\n${minutes}m"
+        hours > 0 -> "${hours}h"
+        else -> "${minutes}m"
+    }
 }
 
 @Composable
