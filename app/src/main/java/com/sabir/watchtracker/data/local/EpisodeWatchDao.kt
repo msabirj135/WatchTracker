@@ -8,6 +8,17 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface EpisodeWatchDao {
 
+    @Query(
+        """
+        SELECT *
+        FROM episode_watches
+        ORDER BY watchedDateEpochDay DESC,
+                 seasonNumber DESC,
+                 episodeNumber DESC
+        """
+    )
+    fun observeAll(): Flow<List<EpisodeWatch>>
+
     @Upsert
     suspend fun upsert(
         episodeWatch: EpisodeWatch
