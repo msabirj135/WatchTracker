@@ -76,11 +76,9 @@ fun HomeScreen(
 
         item {
             HomeSummary(
-                planToWatchCount =
-                    libraryUiState.planToWatchCount,
                 movieCount = libraryUiState.movieCount,
-                completedCount =
-                    libraryUiState.completedCount
+                tvShowCount = libraryUiState.tvShowCount,
+                totalWatchMinutes = libraryUiState.totalWatchMinutes
             )
         }
 
@@ -186,6 +184,7 @@ fun HomeScreen(
 
         item {
             LibraryOverview(
+                totalCount = libraryUiState.totalCount,
                 planToWatchCount =
                     libraryUiState.planToWatchCount,
                 completedCount =
@@ -258,9 +257,9 @@ private fun HomeHeader(
 
 @Composable
 private fun HomeSummary(
-    planToWatchCount: Int,
     movieCount: Int,
-    completedCount: Int
+    tvShowCount: Int,
+    totalWatchMinutes: Int
 ) {
     Row(
         modifier = Modifier
@@ -271,20 +270,20 @@ private fun HomeSummary(
     ) {
         SummaryCard(
             modifier = Modifier.weight(1f),
-            value = planToWatchCount.toString(),
-            label = "Planned"
-        )
-
-        SummaryCard(
-            modifier = Modifier.weight(1f),
             value = movieCount.toString(),
             label = "Movies"
         )
 
         SummaryCard(
             modifier = Modifier.weight(1f),
-            value = completedCount.toString(),
-            label = "Completed"
+            value = tvShowCount.toString(),
+            label = "TV Shows"
+        )
+
+        SummaryCard(
+            modifier = Modifier.weight(1f),
+            value = formatWatchTime(totalWatchMinutes),
+            label = "Watch time"
         )
     }
 }
@@ -648,113 +647,113 @@ private fun EmptyHistoryCard(
 
 @Composable
 private fun LibraryOverview(
+    totalCount: Int,
     planToWatchCount: Int,
     completedCount: Int,
     droppedCount: Int,
     onSearchClick: () -> Unit
 ) {
-    Column(
-        modifier = Modifier.padding(
-            horizontal = 20.dp
-        ),
-        verticalArrangement =
-            Arrangement.spacedBy(12.dp)
-    ) {
-        LibraryCountRow(
-            symbol = "＋",
-            title = "Plan to Watch",
-            subtitle = "Titles saved for later",
-            count = planToWatchCount,
-            onClick = onSearchClick
-        )
-
-        LibraryCountRow(
-            symbol = "✓",
-            title = "Completed",
-            subtitle = "Your watch history",
-            count = completedCount,
-            onClick = {}
-        )
-
-        LibraryCountRow(
-            symbol = "×",
-            title = "Dropped",
-            subtitle = "Titles you stopped watching",
-            count = droppedCount,
-            onClick = {}
-        )
-    }
-}
-
-@Composable
-private fun LibraryCountRow(
-    symbol: String,
-    title: String,
-    subtitle: String,
-    count: Int,
-    onClick: () -> Unit
-) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        onClick = onClick,
-        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
             containerColor = ScreenSurface
         )
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(18.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .background(
-                        color = ScreenPrimary.copy(
-                            alpha = 0.14f
-                        ),
-                        shape = RoundedCornerShape(13.dp)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Library breakdown",
+                        color = ScreenTextPrimary,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "$totalCount titles across your collection",
+                        color = ScreenTextSecondary,
+                        fontSize = 11.sp
+                    )
+                }
                 Text(
-                    text = symbol,
+                    text = totalCount.toString(),
                     color = ScreenPrimary,
-                    fontSize = 21.sp,
+                    fontSize = 24.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
 
-            Spacer(
-                modifier = Modifier.width(14.dp)
-            )
+            Spacer(modifier = Modifier.height(16.dp))
 
-            Column(
-                modifier = Modifier.weight(1f)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(7.dp)
+                    .clip(RoundedCornerShape(8.dp)),
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                Text(
-                    text = title,
-                    color = ScreenTextPrimary,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-
-                Text(
-                    text = subtitle,
-                    color = ScreenTextSecondary,
-                    fontSize = 12.sp
-                )
+                if (planToWatchCount > 0) {
+                    Box(Modifier.weight(planToWatchCount.toFloat()).fillMaxSize().background(ScreenWarning))
+                }
+                if (completedCount > 0) {
+                    Box(Modifier.weight(completedCount.toFloat()).fillMaxSize().background(ScreenSuccess))
+                }
+                if (droppedCount > 0) {
+                    Box(Modifier.weight(droppedCount.toFloat()).fillMaxSize().background(ScreenTextSecondary))
+                }
+                if (totalCount == 0) {
+                    Box(Modifier.fillMaxSize().background(ScreenSurfaceLight))
+                }
             }
 
-            Text(
-                text = count.toString(),
-                color = ScreenTextPrimary,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold
-            )
+            Spacer(modifier = Modifier.height(18.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                LibraryStatusStat(Modifier.weight(1f), "＋", planToWatchCount, "Planned", ScreenWarning)
+                LibraryStatusStat(Modifier.weight(1f), "✓", completedCount, "Completed", ScreenSuccess)
+                LibraryStatusStat(Modifier.weight(1f), "×", droppedCount, "Dropped", ScreenTextSecondary)
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Button(
+                onClick = onSearchClick,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = ScreenPrimary),
+                shape = RoundedCornerShape(13.dp)
+            ) {
+                Text("+ Add a title", fontWeight = FontWeight.Bold)
+            }
         }
+    }
+}
+
+@Composable
+private fun LibraryStatusStat(
+    modifier: Modifier,
+    symbol: String,
+    count: Int,
+    label: String,
+    color: Color
+) {
+    Column(
+        modifier = modifier
+            .background(color.copy(alpha = 0.10f), RoundedCornerShape(14.dp))
+            .padding(vertical = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(symbol, color = color, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        Text(count.toString(), color = ScreenTextPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+        Text(label, color = ScreenTextSecondary, fontSize = 9.sp, maxLines = 1)
     }
 }
 
