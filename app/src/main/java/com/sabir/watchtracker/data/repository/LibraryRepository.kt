@@ -1,4 +1,4 @@
-﻿package com.sabir.watchtracker.data.repository
+package com.sabir.watchtracker.data.repository
 
 import android.content.Context
 import com.sabir.watchtracker.data.local.EpisodeWatch
@@ -106,7 +106,8 @@ class LibraryRepository(
         currentSeason: Int? = null,
         currentEpisode: Int? = null,
         totalSeasons: Int? = null,
-        totalEpisodes: Int? = null
+        totalEpisodes: Int? = null,
+        runtimeMinutes: Int? = null
     ) {
         val mediaType = result.mediaType
             ?.takeIf { type ->
@@ -148,12 +149,29 @@ class LibraryRepository(
                 ?: existingItem?.totalSeasons,
             totalEpisodes = totalEpisodes
                 ?: existingItem?.totalEpisodes,
+            runtimeMinutes = runtimeMinutes
+                ?: existingItem?.runtimeMinutes,
             addedAt = existingItem?.addedAt
                 ?: currentTime,
             updatedAt = currentTime
         )
 
         libraryItemDao.upsert(libraryItem)
+    }
+
+    suspend fun updateMovieRuntime(
+        tmdbId: Int,
+        runtimeMinutes: Int
+    ) {
+        val movie = libraryItemDao.getItem(tmdbId, "movie")
+            ?: return
+
+        libraryItemDao.upsert(
+            movie.copy(
+                runtimeMinutes = runtimeMinutes.coerceAtLeast(0),
+                updatedAt = System.currentTimeMillis()
+            )
+        )
     }
 
     suspend fun updateItem(
