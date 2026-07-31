@@ -1,0 +1,41 @@
+# Android Studio
+.idea/
+*.iml
+
+# Gradle
+.gradle/
+build/
+**/build/
+
+# Local Android SDK and secret properties
+local.properties
+
+# Kotlin
+.kotlin/
+
+# Native build files
+.externalNativeBuild/
+.cxx/
+
+# Generated APK and App Bundle files
+*.apk
+*.aab
+
+# Signing keys
+*.jks
+*.keystore
+
+# Logs
+*.log
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store
+
+# Temporary and backup files
+*.tmp
+*.bak
+*.backup-*
