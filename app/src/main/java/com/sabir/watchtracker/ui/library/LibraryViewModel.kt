@@ -11,6 +11,7 @@ import com.sabir.watchtracker.data.local.LibraryStatus
 import com.sabir.watchtracker.data.repository.LibraryRepository
 import com.sabir.watchtracker.data.repository.TmdbRepository
 import java.time.LocalDate
+import java.time.YearMonth
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -56,6 +57,11 @@ data class MonthlyGridEntry(
     val watchedCount: Int
         get() = if (item.mediaType == "tv") episodes.size else 1
 }
+
+data class MonthlyWatchTime(
+    val label: String,
+    val minutes: Int
+)
 
 data class LibraryUiState(
     val isLoading: Boolean = true,
@@ -222,6 +228,51 @@ data class LibraryUiState(
         get() = items.mapNotNull { it.personalRating }
             .takeIf { it.isNotEmpty() }
             ?.average()
+
+    val longestWatchStreak: Int
+        get() {
+            val dates = (
+                watchedMovies.mapNotNull { it.watchDateEpochDay } +
+                    episodeWatches.map { it.watchedDateEpochDay }
+                )
+                .distinct()
+                .sorted()
+
+            var longest = 0
+            var current = 0
+            var previous: Long? = null
+
+            dates.forEach { date ->
+                current = if (previous != null && date == previous!! + 1L) {
+                    current + 1
+                } else {
+                    1
+                }
+                longest = maxOf(longest, current)
+                previous = date
+            }
+
+            return longest
+        }
+
+    val monthlyWatchTimeTrend: List<MonthlyWatchTime>
+        get() {
+            val currentMonth = YearMonth.now()
+            return (5 downTo 0).map { monthsAgo ->
+                val yearMonth = currentMonth.minusMonths(monthsAgo.toLong())
+                val minutes = monthlyLists.firstOrNull { month ->
+                    month.year == yearMonth.year &&
+                        month.month == yearMonth.monthValue
+                }?.totalMinutes ?: 0
+
+                MonthlyWatchTime(
+                    label = yearMonth.month.name.take(3)
+                        .lowercase()
+                        .replaceFirstChar { it.uppercase() },
+                    minutes = minutes
+                )
+            }
+        }
 
     val monthlyLists: List<MonthlyWatchList>
         get() = watchHistoryEntries
