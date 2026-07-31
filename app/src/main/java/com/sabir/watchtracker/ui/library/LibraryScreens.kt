@@ -1231,8 +1231,136 @@ fun StatisticsScreen(
             }
         }
 
+        item { LongestStreakCard(libraryUiState.longestWatchStreak) }
+        item { MonthlyWatchTimeCard(libraryUiState.monthlyWatchTimeTrend) }
+
         item { WatchTimeSplitCard(libraryUiState) }
         item { StatusDistributionCard(libraryUiState) }
+    }
+}
+
+@Composable
+private fun LongestStreakCard(days: Int) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = ScreenSurface)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier.size(54.dp).background(
+                    ScreenPrimary.copy(alpha = 0.14f),
+                    RoundedCornerShape(16.dp)
+                ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("🔥", fontSize = 25.sp)
+            }
+            Spacer(modifier = Modifier.width(15.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "$days ${if (days == 1) "day" else "days"}",
+                    color = ScreenTextPrimary,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Longest watching streak",
+                    color = ScreenTextSecondary,
+                    fontSize = 12.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MonthlyWatchTimeCard(months: List<MonthlyWatchTime>) {
+    val maximumMinutes = months.maxOfOrNull { it.minutes }
+        ?.coerceAtLeast(1)
+        ?: 1
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = ScreenSurface)
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text(
+                text = "Watching hours by month",
+                color = ScreenTextPrimary,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "Last 6 months",
+                color = ScreenTextSecondary,
+                fontSize = 11.sp
+            )
+            Spacer(modifier = Modifier.height(18.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.Bottom
+            ) {
+                months.forEach { month ->
+                    val barHeight = if (month.minutes == 0) {
+                        4.dp
+                    } else {
+                        (month.minutes.toFloat() / maximumMinutes * 92f)
+                            .coerceAtLeast(10f)
+                            .dp
+                    }
+
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = formatHoursForChart(month.minutes),
+                            color = ScreenTextSecondary,
+                            fontSize = 9.sp,
+                            maxLines = 1
+                        )
+                        Spacer(modifier = Modifier.height(5.dp))
+                        Box(
+                            modifier = Modifier.height(96.dp),
+                            contentAlignment = Alignment.BottomCenter
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .width(25.dp)
+                                    .height(barHeight)
+                                    .background(
+                                        if (month.minutes > 0) ScreenPrimary else ScreenSurfaceLight,
+                                        RoundedCornerShape(topStart = 7.dp, topEnd = 7.dp)
+                                    )
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = month.label,
+                            color = ScreenTextSecondary,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun formatHoursForChart(minutes: Int): String {
+    if (minutes <= 0) return "0h"
+    val hours = minutes / 60f
+    return if (hours >= 10f || hours % 1f == 0f) {
+        "${hours.toInt()}h"
+    } else {
+        String.format("%.1fh", hours)
     }
 }
 
