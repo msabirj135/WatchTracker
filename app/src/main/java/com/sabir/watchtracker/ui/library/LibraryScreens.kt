@@ -1,4 +1,4 @@
-﻿package com.sabir.watchtracker.ui.library
+package com.sabir.watchtracker.ui.library
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -1164,86 +1164,105 @@ fun StatisticsScreen(
             )
         }
 
+        item { WatchTimeHeroCard(libraryUiState) }
+
         item {
-            StatisticCard(
-                value = libraryUiState
-                    .totalCount
-                    .toString(),
-                label = "Total titles",
-                symbol = "▦"
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                CompactStatisticCard(
+                    modifier = Modifier.weight(1f),
+                    value = libraryUiState.watchedMovieCount.toString(),
+                    label = "Movies watched",
+                    symbol = "▶"
+                )
+                CompactStatisticCard(
+                    modifier = Modifier.weight(1f),
+                    value = libraryUiState.watchedEpisodeCount.toString(),
+                    label = "Episodes watched",
+                    symbol = "▣"
+                )
+            }
         }
 
         item {
-            StatisticCard(
-                value = libraryUiState
-                    .completedCount
-                    .toString(),
-                label = "Completed",
-                symbol = "✓"
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                CompactStatisticCard(
+                    modifier = Modifier.weight(1f),
+                    value = libraryUiState.thisMonthCount.toString(),
+                    label = "This month",
+                    symbol = "◷"
+                )
+                CompactStatisticCard(
+                    modifier = Modifier.weight(1f),
+                    value = libraryUiState.averagePersonalRating
+                        ?.let { formatRating(it) }
+                        ?: "—",
+                    label = "Average rating",
+                    symbol = "★"
+                )
+            }
         }
 
-        item {
-            StatisticCard(
-                value = libraryUiState
-                    .planToWatchCount
-                    .toString(),
-                label = "Plan to Watch",
-                symbol = "＋"
-            )
-        }
+        item { WatchTimeSplitCard(libraryUiState) }
+        item { StatusDistributionCard(libraryUiState) }
+    }
+}
 
-        item {
-            StatisticCard(
-                value = libraryUiState
-                    .movieCount
-                    .toString(),
-                label = "Movies",
-                symbol = "▶"
+@Composable
+private fun WatchTimeHeroCard(state: LibraryUiState) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = ScreenPrimary)
+    ) {
+        Column(modifier = Modifier.padding(22.dp)) {
+            Text(
+                text = "TOTAL WATCH TIME",
+                color = Color.White.copy(alpha = 0.78f),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.4.sp
             )
-        }
-
-        item {
-            StatisticCard(
-                value = libraryUiState
-                    .tvShowCount
-                    .toString(),
-                label = "TV Shows",
-                symbol = "▣"
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = formatWatchTime(state.totalWatchMinutes),
+                color = Color.White,
+                fontSize = 34.sp,
+                fontWeight = FontWeight.ExtraBold
             )
-        }
-
-        item {
-            StatisticCard(
-                value = libraryUiState
-                    .droppedCount
-                    .toString(),
-                label = "Dropped",
-                symbol = "×"
+            Spacer(modifier = Modifier.height(5.dp))
+            Text(
+                text = "From watched movies and individual TV episodes",
+                color = Color.White.copy(alpha = 0.82f),
+                fontSize = 12.sp
             )
         }
     }
 }
 
 @Composable
-private fun StatisticCard(
+private fun CompactStatisticCard(
+    modifier: Modifier,
     value: String,
     label: String,
     symbol: String
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier,
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
             containerColor = ScreenSurface
         )
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(16.dp)
         ) {
             Box(
                 modifier = Modifier
@@ -1264,26 +1283,101 @@ private fun StatisticCard(
                 )
             }
 
-            Spacer(
-                modifier = Modifier.width(16.dp)
+            Spacer(modifier = Modifier.height(14.dp))
+            Text(
+                text = value,
+                color = ScreenTextPrimary,
+                fontSize = 23.sp,
+                fontWeight = FontWeight.Bold
             )
-
-            Column {
-                Text(
-                    text = value,
-                    color = ScreenTextPrimary,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Text(
-                    text = label,
-                    color = ScreenTextSecondary,
-                    fontSize = 13.sp
-                )
-            }
+            Text(
+                text = label,
+                color = ScreenTextSecondary,
+                fontSize = 12.sp,
+                maxLines = 1
+            )
         }
     }
+}
+
+@Composable
+private fun WatchTimeSplitCard(state: LibraryUiState) {
+    val total = state.totalWatchMinutes.coerceAtLeast(1)
+    val movieShare = state.movieWatchMinutes.toFloat() / total
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = ScreenSurface)
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text("Watch-time breakdown", color = ScreenTextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(16.dp))
+            LinearProgressIndicator(
+                progress = { movieShare },
+                modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(8.dp)),
+                color = ScreenPrimary,
+                trackColor = ScreenSuccess
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+            TimeLegendRow("Movies", state.movieWatchMinutes, ScreenPrimary)
+            Spacer(modifier = Modifier.height(10.dp))
+            TimeLegendRow("TV episodes", state.tvWatchMinutes, ScreenSuccess)
+        }
+    }
+}
+
+@Composable
+private fun TimeLegendRow(label: String, minutes: Int, color: Color) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Box(modifier = Modifier.size(10.dp).background(color, CircleShape))
+        Spacer(modifier = Modifier.width(9.dp))
+        Text(label, modifier = Modifier.weight(1f), color = ScreenTextSecondary, fontSize = 13.sp)
+        Text(formatWatchTime(minutes), color = ScreenTextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun StatusDistributionCard(state: LibraryUiState) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = ScreenSurface)
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text("Library status", color = ScreenTextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(14.dp))
+            StatusCountRow("Plan to watch", state.planToWatchCount, ScreenWarning)
+            StatusCountRow("Watching", state.watching.size, ScreenPrimary)
+            StatusCountRow("Completed", state.completedCount, ScreenSuccess)
+            StatusCountRow("Dropped", state.droppedCount, ScreenTextSecondary)
+        }
+    }
+}
+
+@Composable
+private fun StatusCountRow(label: String, count: Int, color: Color) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(modifier = Modifier.size(9.dp).background(color, CircleShape))
+        Spacer(modifier = Modifier.width(10.dp))
+        Text(label, modifier = Modifier.weight(1f), color = ScreenTextSecondary, fontSize = 13.sp)
+        Text(count.toString(), color = ScreenTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+private fun formatWatchTime(totalMinutes: Int): String {
+    if (totalMinutes <= 0) return "0m"
+    val days = totalMinutes / (24 * 60)
+    val hours = (totalMinutes % (24 * 60)) / 60
+    val minutes = totalMinutes % 60
+    return buildList {
+        if (days > 0) add("${days}d")
+        if (hours > 0) add("${hours}h")
+        if (minutes > 0 || isEmpty()) add("${minutes}m")
+    }.joinToString(" ")
 }
 
 @Composable
