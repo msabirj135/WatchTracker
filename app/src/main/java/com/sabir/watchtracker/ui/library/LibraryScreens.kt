@@ -187,10 +187,10 @@ fun HomeScreen(
                 totalCount = libraryUiState.totalCount,
                 planToWatchCount =
                     libraryUiState.planToWatchCount,
+                watchingCount =
+                    libraryUiState.watching.size,
                 completedCount =
                     libraryUiState.completedCount,
-                droppedCount =
-                    libraryUiState.droppedCount,
                 onSearchClick = onSearchClick
             )
         }
@@ -520,7 +520,7 @@ private fun HistoryCard(
             Column(
                 modifier = Modifier
                     .padding(14.dp)
-                    .height(94.dp)
+                    .height(110.dp)
             ) {
                 Text(
                     text = item.title,
@@ -658,8 +658,8 @@ private fun EmptyHistoryCard(
 private fun LibraryOverview(
     totalCount: Int,
     planToWatchCount: Int,
+    watchingCount: Int,
     completedCount: Int,
-    droppedCount: Int,
     onSearchClick: () -> Unit
 ) {
     Card(
@@ -710,11 +710,11 @@ private fun LibraryOverview(
                 if (planToWatchCount > 0) {
                     Box(Modifier.weight(planToWatchCount.toFloat()).fillMaxSize().background(ScreenWarning))
                 }
+                if (watchingCount > 0) {
+                    Box(Modifier.weight(watchingCount.toFloat()).fillMaxSize().background(ScreenPrimary))
+                }
                 if (completedCount > 0) {
                     Box(Modifier.weight(completedCount.toFloat()).fillMaxSize().background(ScreenSuccess))
-                }
-                if (droppedCount > 0) {
-                    Box(Modifier.weight(droppedCount.toFloat()).fillMaxSize().background(ScreenTextSecondary))
                 }
                 if (totalCount == 0) {
                     Box(Modifier.fillMaxSize().background(ScreenSurfaceLight))
@@ -728,8 +728,8 @@ private fun LibraryOverview(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 LibraryStatusStat(Modifier.weight(1f), "＋", planToWatchCount, "Planned", ScreenWarning)
+                LibraryStatusStat(Modifier.weight(1f), "▶", watchingCount, "Watching", ScreenPrimary)
                 LibraryStatusStat(Modifier.weight(1f), "✓", completedCount, "Completed", ScreenSuccess)
-                LibraryStatusStat(Modifier.weight(1f), "×", droppedCount, "Dropped", ScreenTextSecondary)
             }
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -1385,7 +1385,6 @@ private fun StatusDistributionCard(state: LibraryUiState) {
             StatusCountRow("Plan to watch", state.planToWatchCount, ScreenWarning)
             StatusCountRow("Watching", state.watching.size, ScreenPrimary)
             StatusCountRow("Completed", state.completedCount, ScreenSuccess)
-            StatusCountRow("Dropped", state.droppedCount, ScreenTextSecondary)
         }
     }
 }
