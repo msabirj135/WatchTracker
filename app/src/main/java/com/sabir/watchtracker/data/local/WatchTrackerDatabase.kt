@@ -1,4 +1,4 @@
-﻿package com.sabir.watchtracker.data.local
+package com.sabir.watchtracker.data.local
 
 import android.content.Context
 import androidx.room.Database
@@ -13,7 +13,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         LibraryItem::class,
         EpisodeWatch::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(
@@ -71,6 +71,17 @@ abstract class WatchTrackerDatabase : RoomDatabase() {
             }
         }
 
+        private val migration2To3 = object : Migration(
+            startVersion = 2,
+            endVersion = 3
+        ) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE library_items ADD COLUMN runtimeMinutes INTEGER"
+                )
+            }
+        }
+
         @Volatile
         private var instance: WatchTrackerDatabase? = null
 
@@ -83,7 +94,10 @@ abstract class WatchTrackerDatabase : RoomDatabase() {
                     WatchTrackerDatabase::class.java,
                     DATABASE_NAME
                 )
-                    .addMigrations(migration1To2)
+                    .addMigrations(
+                        migration1To2,
+                        migration2To3
+                    )
                     .build()
                     .also { database ->
                         instance = database
