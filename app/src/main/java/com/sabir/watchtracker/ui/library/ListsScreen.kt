@@ -62,6 +62,7 @@ private val ListsMuted = Color(0xFF9A9DA8)
 fun ListsScreen(
     paddingValues: PaddingValues,
     state: LibraryUiState,
+    onBackClick: () -> Unit,
     onCreateList: (String, String) -> Unit,
     onUpdateList: (CustomList, String, String) -> Unit,
     onDeleteList: (Long) -> Unit,
@@ -125,6 +126,7 @@ fun ListsScreen(
         else -> ListsOverview(
             paddingValues = paddingValues,
             state = state,
+            onBackClick = onBackClick,
             onNewList = { showCreateDialog = true },
             onMonthClick = { selectedMonth = it },
             onListClick = { selectedList = it }
@@ -176,6 +178,7 @@ fun ListsScreen(
 private fun ListsOverview(
     paddingValues: PaddingValues,
     state: LibraryUiState,
+    onBackClick: () -> Unit,
     onNewList: () -> Unit,
     onMonthClick: (MonthlyWatchList) -> Unit,
     onListClick: (CustomList) -> Unit
@@ -190,6 +193,14 @@ private fun ListsOverview(
     ) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                Button(
+                    onClick = onBackClick,
+                    modifier = Modifier.size(44.dp),
+                    contentPadding = PaddingValues(0.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ListsSurfaceLight),
+                    shape = RoundedCornerShape(13.dp)
+                ) { Text("←", fontSize = 20.sp) }
+                Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Lists", color = ListsText, fontSize = 28.sp, fontWeight = FontWeight.Bold)
                     Text("Monthly history and your collections", color = ListsMuted, fontSize = 13.sp)
