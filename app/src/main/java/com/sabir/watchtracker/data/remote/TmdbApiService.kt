@@ -1,10 +1,16 @@
-﻿package com.sabir.watchtracker.data.remote
+package com.sabir.watchtracker.data.remote
 
 import retrofit2.http.GET
 import retrofit2.http.Path
 import retrofit2.http.Query
 
 interface TmdbApiService {
+
+    @GET("3/movie/{movieId}")
+    suspend fun getMovieDetails(
+        @Path("movieId") movieId: Int,
+        @Query("language") language: String = "en-US"
+    ): TmdbMovieDetails
 
     @GET("3/search/multi")
     suspend fun searchMoviesAndShows(
