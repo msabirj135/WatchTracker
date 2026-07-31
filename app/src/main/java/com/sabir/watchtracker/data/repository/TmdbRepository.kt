@@ -1,13 +1,18 @@
-﻿package com.sabir.watchtracker.data.repository
+package com.sabir.watchtracker.data.repository
 
 import com.sabir.watchtracker.data.remote.TmdbApiClient
 import com.sabir.watchtracker.data.remote.TmdbSearchResult
+import com.sabir.watchtracker.data.remote.TmdbMovieDetails
 import com.sabir.watchtracker.data.remote.TmdbSeasonDetails
 import com.sabir.watchtracker.data.remote.TmdbTvDetails
 
 class TmdbRepository {
 
     private val apiService = TmdbApiClient.service
+
+    suspend fun getMovieDetails(movieId: Int): TmdbMovieDetails {
+        return apiService.getMovieDetails(movieId)
+    }
 
     suspend fun searchMoviesAndShows(
         query: String
