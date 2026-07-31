@@ -312,8 +312,8 @@ private fun MonthlyListDetail(
         }
         item(span = { GridItemSpan(maxLineSpan) }) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                MiniSummary(Modifier.weight(1f), month.entries.size.toString(), "Titles")
-                MiniSummary(Modifier.weight(1f), month.activityCount.toString(), "Watched")
+                MiniSummary(Modifier.weight(1f), month.movieCount.toString(), "Movies")
+                MiniSummary(Modifier.weight(1f), month.tvShowCount.toString(), "TV shows")
                 MiniSummary(Modifier.weight(1f), formatMinutes(month.totalMinutes), "Watch time")
             }
         }
@@ -341,7 +341,7 @@ private fun MonthlyPosterCard(entry: MonthlyGridEntry, onClick: () -> Unit) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(106.dp)
+                    .height(76.dp)
                     .padding(8.dp)
             ) {
                 Text(
@@ -367,33 +367,16 @@ private fun MonthlyPosterCard(entry: MonthlyGridEntry, onClick: () -> Unit) {
                 )
                 Text(
                     if (item.mediaType == "tv") {
-                        "${entry.episodes.size} this month"
-                    } else {
-                        "Watched"
-                    },
-                    color = ListsMuted,
-                    fontSize = 8.sp,
-                    maxLines = 1
-                )
-                Text(
-                    if (item.mediaType == "tv") {
                         item.totalEpisodes?.let {
-                            "${entry.overallWatchedEpisodes}/$it overall"
-                        } ?: "${entry.overallWatchedEpisodes} overall"
+                            "${entry.overallWatchedEpisodes}/$it overall • ${formatMinutes(entry.totalMinutes)}"
+                        } ?: "${entry.overallWatchedEpisodes} overall • ${formatMinutes(entry.totalMinutes)}"
                     } else {
-                        formatEpochDayForLists(entry.watchedDateEpochDay)
+                        "${formatShortEpochDay(entry.watchedDateEpochDay)} • ${formatMinutes(entry.totalMinutes)}"
                     },
                     color = ListsMuted,
                     fontSize = 8.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.weight(1f))
-                Text(
-                    formatMinutes(entry.totalMinutes),
-                    color = ListsMuted,
-                    fontSize = 8.sp,
-                    maxLines = 1
                 )
             }
         }
@@ -684,6 +667,9 @@ private fun TitlePickerDialog(
 
 private fun formatEpochDayForLists(epochDay: Long): String =
     LocalDate.ofEpochDay(epochDay).format(DateTimeFormatter.ofPattern("dd MMM yyyy"))
+
+private fun formatShortEpochDay(epochDay: Long): String =
+    LocalDate.ofEpochDay(epochDay).format(DateTimeFormatter.ofPattern("dd MMM"))
 
 private fun formatMinutes(minutes: Int): String {
     if (minutes <= 0) return "0m"
