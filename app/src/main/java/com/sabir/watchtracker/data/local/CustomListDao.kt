@@ -22,6 +22,9 @@ interface CustomListDao {
     @Query("DELETE FROM custom_list_items WHERE listId = :listId AND tmdbId = :tmdbId AND mediaType = :mediaType")
     suspend fun removeItem(listId: Long, tmdbId: Int, mediaType: String)
 
+    @Query("DELETE FROM custom_list_items WHERE tmdbId = :tmdbId AND mediaType = :mediaType")
+    suspend fun removeTitleFromAllLists(tmdbId: Int, mediaType: String)
+
     @Query("DELETE FROM custom_list_items WHERE listId = :listId")
     suspend fun deleteItems(listId: Long)
 
