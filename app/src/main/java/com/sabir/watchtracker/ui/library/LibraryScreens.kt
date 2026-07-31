@@ -23,6 +23,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -55,7 +56,8 @@ private val ScreenTextSecondary = Color(0xFF9A9DA8)
 fun HomeScreen(
     paddingValues: PaddingValues,
     libraryUiState: LibraryUiState,
-    onSearchClick: () -> Unit
+    onSearchClick: () -> Unit,
+    onItemClick: (LibraryItem) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier
@@ -82,13 +84,53 @@ fun HomeScreen(
             )
         }
 
+        if (libraryUiState.continueWatching.isNotEmpty()) {
+            item {
+                SectionHeader(
+                    title = "Continue watching",
+                    action = "${libraryUiState.continueWatching.size} shows"
+                )
+            }
+
+            item {
+                LazyRow(
+                    horizontalArrangement =
+                        Arrangement.spacedBy(14.dp),
+                    contentPadding = PaddingValues(
+                        horizontal = 20.dp
+                    )
+                ) {
+                    items(
+                        items = libraryUiState.continueWatching,
+                        key = { item ->
+                            "continue-${item.tmdbId}"
+                        }
+                    ) { item ->
+                        ContinueWatchingCard(
+                            item = item,
+                            watchedEpisodeCount =
+                                libraryUiState
+                                    .watchedEpisodeCount(
+                                        item.tmdbId
+                                    ),
+                            onClick = {
+                                onItemClick(item)
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
         item {
             SectionHeader(
                 title = "Watch history",
                 action = if (
-                    libraryUiState.watchHistory.isNotEmpty()
+                    libraryUiState
+                        .watchHistoryEntries
+                        .isNotEmpty()
                 ) {
-                    "${libraryUiState.watchHistory.size} completed"
+                    "${libraryUiState.watchHistoryEntries.size} entries"
                 } else {
                     ""
                 }
@@ -99,7 +141,9 @@ fun HomeScreen(
             item {
                 LoadingBlock()
             }
-        } else if (libraryUiState.watchHistory.isEmpty()) {
+        } else if (
+            libraryUiState.watchHistoryEntries.isEmpty()
+        ) {
             item {
                 EmptyHistoryCard(
                     onSearchClick = onSearchClick
@@ -116,13 +160,18 @@ fun HomeScreen(
                 ) {
                     items(
                         items = libraryUiState
-                            .watchHistory
-                            .take(10),
-                        key = { item ->
-                            "${item.mediaType}-${item.tmdbId}"
+                            .watchHistoryEntries
+                            .take(20),
+                        key = { entry ->
+                            entry.key
                         }
-                    ) { item ->
-                        HistoryCard(item)
+                    ) { entry ->
+                        HistoryCard(
+                            entry = entry,
+                            onClick = {
+                                onItemClick(entry.item)
+                            }
+                        )
                     }
                 }
             }
@@ -316,11 +365,146 @@ private fun SectionHeader(
 }
 
 @Composable
-private fun HistoryCard(
-    item: LibraryItem
+private fun ContinueWatchingCard(
+    item: LibraryItem,
+    watchedEpisodeCount: Int,
+    onClick: () -> Unit
 ) {
+    val totalEpisodes = item.totalEpisodes
+        ?.coerceAtLeast(0)
+        ?: 0
+
+    val progress = if (totalEpisodes > 0) {
+        watchedEpisodeCount
+            .toFloat()
+            .div(totalEpisodes.toFloat())
+            .coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+
+    Card(
+        modifier = Modifier.width(270.dp),
+        onClick = onClick,
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = ScreenSurface
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp)
+        ) {
+            LibraryPoster(
+                item = item,
+                modifier = Modifier
+                    .width(82.dp)
+                    .height(124.dp)
+            )
+
+            Spacer(
+                modifier = Modifier.width(13.dp)
+            )
+
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(124.dp),
+                verticalArrangement =
+                    Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(
+                        text = item.title,
+                        color = ScreenTextPrimary,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    Spacer(
+                        modifier = Modifier.height(6.dp)
+                    )
+
+                    Text(
+                        text = item.episodeProgressText
+                            ?: "Not started",
+                        color = ScreenPrimary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment =
+                            Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (totalEpisodes > 0) {
+                                "$watchedEpisodeCount / $totalEpisodes"
+                            } else {
+                                "$watchedEpisodeCount watched"
+                            },
+                            modifier = Modifier.weight(1f),
+                            color = ScreenTextSecondary,
+                            fontSize = 11.sp
+                        )
+
+                        if (totalEpisodes > 0) {
+                            Text(
+                                text = "${(progress * 100).toInt()}%",
+                                color = ScreenPrimary,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Spacer(
+                        modifier = Modifier.height(6.dp)
+                    )
+
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp),
+                        color = ScreenPrimary,
+                        trackColor = ScreenSurfaceLight
+                    )
+
+                    Spacer(
+                        modifier = Modifier.height(6.dp)
+                    )
+
+                    Text(
+                        text = item.watchDateEpochDay
+                            ?.let { epochDay ->
+                                "Last watched ${formatEpochDay(epochDay)}"
+                            }
+                            ?: "Open to continue",
+                        color = ScreenTextSecondary,
+                        fontSize = 10.sp,
+                        maxLines = 1
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HistoryCard(
+    entry: WatchHistoryEntry,
+    onClick: () -> Unit
+) {
+    val item = entry.item
+
     Card(
         modifier = Modifier.width(164.dp),
+        onClick = onClick,
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
             containerColor = ScreenSurface
@@ -351,9 +535,26 @@ private fun HistoryCard(
                 )
 
                 Text(
-                    text = item.watchDateEpochDay
-                        ?.let(::formatEpochDay)
-                        ?: "Date not recorded",
+                    text = entry.detailText,
+                    color = if (item.mediaType == "tv") {
+                        ScreenPrimary
+                    } else {
+                        ScreenTextSecondary
+                    },
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(
+                    modifier = Modifier.height(5.dp)
+                )
+
+                Text(
+                    text = formatEpochDay(
+                        entry.watchedDateEpochDay
+                    ),
                     color = ScreenTextSecondary,
                     fontSize = 11.sp,
                     maxLines = 1
@@ -408,7 +609,7 @@ private fun EmptyHistoryCard(
             )
 
             Text(
-                text = "No completed titles yet",
+                text = "No watch history yet",
                 color = ScreenTextPrimary,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold
@@ -419,7 +620,7 @@ private fun EmptyHistoryCard(
             )
 
             Text(
-                text = "Completed movies and shows will appear here.",
+                text = "Watched movies and TV episodes will appear here.",
                 color = ScreenTextSecondary,
                 fontSize = 13.sp,
                 textAlign = TextAlign.Center

@@ -85,7 +85,9 @@ private fun WatchTrackerApp(
     }
 
     BackHandler(
-        enabled = selectedLibraryItem != null || searchIsOpen
+        enabled = selectedLibraryItem != null ||
+            searchIsOpen ||
+            selectedTab != 0
     ) {
         when {
             selectedLibraryItem != null -> {
@@ -94,6 +96,10 @@ private fun WatchTrackerApp(
 
             searchIsOpen -> {
                 searchIsOpen = false
+            }
+
+            selectedTab != 0 -> {
+                selectedTab = 0
             }
         }
     }
@@ -155,8 +161,10 @@ private fun WatchTrackerApp(
                                     indicatorColor = AppPrimary.copy(
                                         alpha = 0.14f
                                     ),
-                                    unselectedIconColor = AppTextSecondary,
-                                    unselectedTextColor = AppTextSecondary
+                                    unselectedIconColor =
+                                        AppTextSecondary,
+                                    unselectedTextColor =
+                                        AppTextSecondary
                                 )
                             )
                         }
@@ -170,6 +178,9 @@ private fun WatchTrackerApp(
                             libraryUiState = libraryUiState,
                             onSearchClick = {
                                 searchIsOpen = true
+                            },
+                            onItemClick = { item ->
+                                selectedLibraryItem = item
                             }
                         )
                     }
@@ -215,3 +226,4 @@ private fun WatchTrackerApp(
         }
     }
 }
+
