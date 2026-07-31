@@ -1,4 +1,4 @@
-﻿package com.sabir.watchtracker.data.local
+package com.sabir.watchtracker.data.local
 
 import androidx.room.Entity
 
@@ -26,6 +26,7 @@ data class LibraryItem(
     val currentEpisode: Int?,
     val totalSeasons: Int?,
     val totalEpisodes: Int?,
+    val runtimeMinutes: Int?,
     val addedAt: Long,
     val updatedAt: Long
 ) {
