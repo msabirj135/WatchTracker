@@ -357,6 +357,42 @@ class LibraryRepository(
         )
     }
 
+    suspend fun markSeriesCompleted(
+        show: LibraryItem,
+        remainingEpisodes: List<TmdbEpisode>,
+        watchedDateEpochDay: Long
+    ) {
+        episodeWatchDao.upsertAll(
+            remainingEpisodes.map { episode ->
+                EpisodeWatch(
+                    tmdbShowId = show.tmdbId,
+                    seasonNumber = episode.seasonNumber,
+                    episodeNumber = episode.episodeNumber,
+                    episodeName = episode.name,
+                    watchedDateEpochDay = watchedDateEpochDay,
+                    runtimeMinutes = episode.runtime
+                )
+            }
+        )
+
+        val finalEpisode = remainingEpisodes.maxWithOrNull(
+            compareBy<TmdbEpisode> { it.seasonNumber }
+                .thenBy { it.episodeNumber }
+        )
+
+        libraryItemDao.upsert(
+            show.copy(
+                status = LibraryStatus.COMPLETED,
+                watchDateEpochDay = watchedDateEpochDay,
+                currentSeason = finalEpisode?.seasonNumber
+                    ?: show.currentSeason,
+                currentEpisode = finalEpisode?.episodeNumber
+                    ?: show.currentEpisode,
+                updatedAt = System.currentTimeMillis()
+            )
+        )
+    }
+
     suspend fun unmarkEpisodeWatched(
         show: LibraryItem,
         seasonNumber: Int,
