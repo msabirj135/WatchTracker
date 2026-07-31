@@ -92,6 +92,7 @@ fun LibraryItemDetailScreen(
             onBackClick = onBackClick,
             onDeleteClick = { showDeleteConfirmation = true },
             onMarkNextEpisode = detailViewModel::markNextEpisodeWatched,
+            onMarkSeriesCompleted = detailViewModel::markSeriesCompleted,
             onMarkEpisode = detailViewModel::markEpisodeWatched,
             onUnmarkEpisode = detailViewModel::unmarkEpisodeWatched,
             onRatingChange = detailViewModel::updatePersonalRating,
@@ -147,6 +148,7 @@ private fun TvShowDetailScreen(
     onBackClick: () -> Unit,
     onDeleteClick: () -> Unit,
     onMarkNextEpisode: () -> Unit,
+    onMarkSeriesCompleted: () -> Unit,
     onMarkEpisode: (TmdbEpisode, Long) -> Unit,
     onUnmarkEpisode: (TmdbEpisode) -> Unit,
     onRatingChange: (Double?) -> Unit,
@@ -160,6 +162,10 @@ private fun TvShowDetailScreen(
 
     var editingEpisode by remember {
         mutableStateOf<TmdbEpisode?>(null)
+    }
+
+    var showCompleteConfirmation by remember {
+        mutableStateOf(false)
     }
 
     val watchedByKey = uiState.episodeWatches.associateBy { watch ->
@@ -224,6 +230,26 @@ private fun TvShowDetailScreen(
                 isSaving = uiState.isSaving,
                 onMarkNextEpisode = onMarkNextEpisode
             )
+        }
+
+        if (
+            uiState.totalEpisodeCount > 0 &&
+            uiState.watchedCount < uiState.totalEpisodeCount
+        ) {
+            item {
+                OutlinedButton(
+                    onClick = { showCompleteConfirmation = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !uiState.isSaving,
+                    shape = RoundedCornerShape(13.dp)
+                ) {
+                    Text(
+                        text = "Mark series completed",
+                        color = DetailSuccess,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         }
 
         if (uiState.errorMessage != null) {
@@ -297,6 +323,33 @@ private fun TvShowDetailScreen(
                 )
             }
         }
+    }
+
+    if (showCompleteConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showCompleteConfirmation = false },
+            title = { Text("Mark series completed?") },
+            text = {
+                Text(
+                    "All remaining episodes will be marked as watched today. Existing episode dates will not be changed."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showCompleteConfirmation = false
+                        onMarkSeriesCompleted()
+                    }
+                ) {
+                    Text("Complete series", color = DetailSuccess, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCompleteConfirmation = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 
     editingEpisode?.let { episode ->
