@@ -50,6 +50,7 @@ import com.sabir.watchtracker.data.local.EpisodeWatch
 import com.sabir.watchtracker.data.local.LibraryItem
 import com.sabir.watchtracker.data.remote.TmdbEpisode
 import com.sabir.watchtracker.data.remote.TmdbSeasonDetails
+import com.sabir.watchtracker.ui.components.StarRatingSelector
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -93,6 +94,7 @@ fun LibraryItemDetailScreen(
             onMarkNextEpisode = detailViewModel::markNextEpisodeWatched,
             onMarkEpisode = detailViewModel::markEpisodeWatched,
             onUnmarkEpisode = detailViewModel::unmarkEpisodeWatched,
+            onRatingChange = detailViewModel::updatePersonalRating,
             onClearError = detailViewModel::clearError
         )
     } else {
@@ -103,6 +105,7 @@ fun LibraryItemDetailScreen(
             onBackClick = onBackClick,
             onDeleteClick = { showDeleteConfirmation = true },
             onUpdateWatchDate = detailViewModel::updateMovieWatchDate,
+            onRatingChange = detailViewModel::updatePersonalRating,
             onClearError = detailViewModel::clearError
         )
     }
@@ -146,6 +149,7 @@ private fun TvShowDetailScreen(
     onMarkNextEpisode: () -> Unit,
     onMarkEpisode: (TmdbEpisode, Long) -> Unit,
     onUnmarkEpisode: (TmdbEpisode) -> Unit,
+    onRatingChange: (Double?) -> Unit,
     onClearError: () -> Unit
 ) {
     val context = LocalContext.current
@@ -200,6 +204,14 @@ private fun TvShowDetailScreen(
 
         item {
             RemoveFromLibraryButton(onClick = onDeleteClick)
+        }
+
+        item {
+            RatingEditorCard(
+                rating = item.personalRating,
+                isSaving = uiState.isSaving,
+                onRatingChange = onRatingChange
+            )
         }
 
         item {
@@ -333,6 +345,7 @@ private fun MovieDetailScreen(
     onBackClick: () -> Unit,
     onDeleteClick: () -> Unit,
     onUpdateWatchDate: (Long?) -> Unit,
+    onRatingChange: (Double?) -> Unit,
     onClearError: () -> Unit
 ) {
     val context = LocalContext.current
@@ -363,6 +376,14 @@ private fun MovieDetailScreen(
 
         item {
             RemoveFromLibraryButton(onClick = onDeleteClick)
+        }
+
+        item {
+            RatingEditorCard(
+                rating = item.personalRating,
+                isSaving = isSaving,
+                onRatingChange = onRatingChange
+            )
         }
 
         item {
@@ -452,15 +473,6 @@ private fun MovieDetailScreen(
             }
         }
 
-        if (item.personalRating != null) {
-            item {
-                DetailInformationCard(
-                    label = "Your rating",
-                    value = "★ ${item.personalRating}/10"
-                )
-            }
-        }
-
         if (item.notes.isNotBlank()) {
             item {
                 DetailInformationCard(
@@ -538,6 +550,34 @@ private fun RemoveFromLibraryButton(
             color = DetailPrimary,
             fontWeight = FontWeight.Bold
         )
+    }
+}
+
+@Composable
+private fun RatingEditorCard(
+    rating: Double?,
+    isSaving: Boolean,
+    onRatingChange: (Double?) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = DetailSurface)
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Text(
+                text = "Your rating",
+                color = DetailTextPrimary,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            StarRatingSelector(
+                rating = rating,
+                onRatingChange = onRatingChange,
+                enabled = !isSaving
+            )
+        }
     }
 }
 
