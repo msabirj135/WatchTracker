@@ -121,6 +121,10 @@ private fun WatchTrackerApp(
                 item = selectedLibraryItem!!,
                 onBackClick = {
                     selectedLibraryItem = null
+                },
+                onDelete = {
+                    selectedLibraryItem?.let(libraryViewModel::deleteItem)
+                    selectedLibraryItem = null
                 }
             )
         } else if (searchIsOpen) {
@@ -193,6 +197,7 @@ private fun WatchTrackerApp(
                             title = "Movies",
                             items = libraryUiState.movies,
                             isLoading = libraryUiState.isLoading,
+                            onBackClick = { selectedTab = 0 },
                             onAddClick = {
                                 searchIsOpen = true
                             },
@@ -208,6 +213,7 @@ private fun WatchTrackerApp(
                             title = "TV Shows",
                             items = libraryUiState.tvShows,
                             isLoading = libraryUiState.isLoading,
+                            onBackClick = { selectedTab = 0 },
                             onAddClick = {
                                 searchIsOpen = true
                             },
@@ -221,6 +227,7 @@ private fun WatchTrackerApp(
                         ListsScreen(
                             paddingValues = innerPadding,
                             state = libraryUiState,
+                            onBackClick = { selectedTab = 0 },
                             onCreateList = libraryViewModel::createCustomList,
                             onUpdateList = libraryViewModel::updateCustomList,
                             onDeleteList = libraryViewModel::deleteCustomList,
@@ -233,7 +240,8 @@ private fun WatchTrackerApp(
                     else -> {
                         StatisticsScreen(
                             paddingValues = innerPadding,
-                            libraryUiState = libraryUiState
+                            libraryUiState = libraryUiState,
+                            onBackClick = { selectedTab = 0 }
                         )
                     }
                 }
