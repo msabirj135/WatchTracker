@@ -1,7 +1,6 @@
 package com.sabir.watchtracker.ui.library
 
 import android.app.DatePickerDialog
-import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -69,19 +68,12 @@ private val detailDateFormatter = DateTimeFormatter.ofPattern(
 fun LibraryItemDetailScreen(
     item: LibraryItem,
     onBackClick: () -> Unit,
+    onDelete: () -> Unit,
     detailViewModel: LibraryDetailViewModel = viewModel()
 ) {
     val uiState by detailViewModel.uiState
-    val backDispatcher = LocalOnBackPressedDispatcherOwner
-        .current
-        ?.onBackPressedDispatcher
-
-    val navigateBack = {
-        if (backDispatcher != null) {
-            backDispatcher.onBackPressed()
-        } else {
-            onBackClick()
-        }
+    var showDeleteConfirmation by remember(item.tmdbId, item.mediaType) {
+        mutableStateOf(false)
     }
 
     LaunchedEffect(item.tmdbId, item.mediaType) {
@@ -94,7 +86,8 @@ fun LibraryItemDetailScreen(
         TvShowDetailScreen(
             item = currentItem,
             uiState = uiState,
-            onBackClick = navigateBack,
+            onBackClick = onBackClick,
+            onDeleteClick = { showDeleteConfirmation = true },
             onMarkNextEpisode = detailViewModel::markNextEpisodeWatched,
             onMarkEpisode = detailViewModel::markEpisodeWatched,
             onUnmarkEpisode = detailViewModel::unmarkEpisodeWatched,
@@ -105,9 +98,39 @@ fun LibraryItemDetailScreen(
             item = currentItem,
             isSaving = uiState.isSaving,
             errorMessage = uiState.errorMessage,
-            onBackClick = navigateBack,
+            onBackClick = onBackClick,
+            onDeleteClick = { showDeleteConfirmation = true },
             onUpdateWatchDate = detailViewModel::updateMovieWatchDate,
             onClearError = detailViewModel::clearError
+        )
+    }
+
+    if (showDeleteConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmation = false },
+            title = { Text("Remove from library?") },
+            text = {
+                Text(
+                    if (item.mediaType == "tv") {
+                        "${item.title} and all its saved episode history will be removed."
+                    } else {
+                        "${item.title} will be removed from your library and watch history."
+                    }
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteConfirmation = false
+                        onDelete()
+                    }
+                ) { Text("Remove", color = DetailPrimary, fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmation = false }) {
+                    Text("Cancel")
+                }
+            }
         )
     }
 }
@@ -117,6 +140,7 @@ private fun TvShowDetailScreen(
     item: LibraryItem,
     uiState: LibraryDetailUiState,
     onBackClick: () -> Unit,
+    onDeleteClick: () -> Unit,
     onMarkNextEpisode: () -> Unit,
     onMarkEpisode: (TmdbEpisode, Long) -> Unit,
     onUnmarkEpisode: (TmdbEpisode) -> Unit,
@@ -163,7 +187,8 @@ private fun TvShowDetailScreen(
         item {
             DetailHeader(
                 title = "TV Show",
-                onBackClick = onBackClick
+                onBackClick = onBackClick,
+                onDeleteClick = onDeleteClick
             )
         }
 
@@ -300,6 +325,7 @@ private fun MovieDetailScreen(
     isSaving: Boolean,
     errorMessage: String?,
     onBackClick: () -> Unit,
+    onDeleteClick: () -> Unit,
     onUpdateWatchDate: (Long?) -> Unit,
     onClearError: () -> Unit
 ) {
@@ -320,7 +346,8 @@ private fun MovieDetailScreen(
         item {
             DetailHeader(
                 title = "Movie",
-                onBackClick = onBackClick
+                onBackClick = onBackClick,
+                onDeleteClick = onDeleteClick
             )
         }
 
@@ -447,16 +474,15 @@ private fun MovieDetailScreen(
 @Composable
 private fun DetailHeader(
     title: String,
-    onBackClick: () -> Unit
+    onBackClick: () -> Unit,
+    onDeleteClick: () -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Button(
-            onClick = {
-                onBackClick()
-            },
+            onClick = onBackClick,
             modifier = Modifier.size(48.dp),
             contentPadding = PaddingValues(0.dp),
             shape = RoundedCornerShape(14.dp),
@@ -479,10 +505,20 @@ private fun DetailHeader(
 
         Text(
             text = title,
+            modifier = Modifier.weight(1f),
             color = DetailTextPrimary,
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold
         )
+
+        TextButton(onClick = onDeleteClick) {
+            Text(
+                text = "Remove",
+                color = DetailPrimary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
     }
 }
 
