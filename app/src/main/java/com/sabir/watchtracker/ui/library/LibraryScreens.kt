@@ -518,10 +518,13 @@ private fun HistoryCard(
             )
 
             Column(
-                modifier = Modifier.padding(14.dp)
+                modifier = Modifier
+                    .padding(14.dp)
+                    .height(94.dp)
             ) {
                 Text(
                     text = item.title,
+                    modifier = Modifier.height(18.dp),
                     color = ScreenTextPrimary,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
@@ -535,6 +538,7 @@ private fun HistoryCard(
 
                 Text(
                     text = entry.detailText,
+                    modifier = Modifier.height(28.dp),
                     color = if (item.mediaType == "tv") {
                         ScreenPrimary
                     } else {
@@ -559,18 +563,23 @@ private fun HistoryCard(
                     maxLines = 1
                 )
 
-                if (item.personalRating != null) {
-                    Spacer(
-                        modifier = Modifier.height(5.dp)
-                    )
+                Spacer(
+                    modifier = Modifier.height(5.dp)
+                )
 
-                    Text(
-                        text = "★ ${formatRating(item.personalRating)}",
-                        color = ScreenWarning,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
+                Text(
+                    text = item.personalRating
+                        ?.let { "★ ${formatRating(it)}" }
+                        ?: "Not rated",
+                    color = if (item.personalRating != null) {
+                        ScreenWarning
+                    } else {
+                        ScreenTextSecondary
+                    },
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1
+                )
             }
         }
     }
@@ -1220,7 +1229,7 @@ fun StatisticsScreen(
                 CompactStatisticCard(
                     modifier = Modifier.weight(1f),
                     value = libraryUiState.thisMonthCount.toString(),
-                    label = "This month",
+                    label = "${LocalDate.now().format(DateTimeFormatter.ofPattern("MMM"))} watches",
                     symbol = "◷"
                 )
                 CompactStatisticCard(
