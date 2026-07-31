@@ -123,15 +123,7 @@ fun HomeScreen(
         item {
             SectionHeader(
                 title = "Watch history",
-                action = if (
-                    libraryUiState
-                        .watchHistoryEntries
-                        .isNotEmpty()
-                ) {
-                    "${libraryUiState.watchHistoryEntries.size} entries"
-                } else {
-                    ""
-                }
+                action = ""
             )
         }
 
@@ -159,7 +151,7 @@ fun HomeScreen(
                     items(
                         items = libraryUiState
                             .watchHistoryEntries
-                            .take(20),
+                            .take(10),
                         key = { entry ->
                             entry.key
                         }
@@ -539,11 +531,7 @@ private fun HistoryCard(
                 Text(
                     text = entry.detailText,
                     modifier = Modifier.height(28.dp),
-                    color = if (item.mediaType == "tv") {
-                        ScreenPrimary
-                    } else {
-                        ScreenTextSecondary
-                    },
+                    color = ScreenPrimary,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 2,
