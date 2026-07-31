@@ -7,6 +7,8 @@ import com.sabir.watchtracker.data.local.EpisodeWatch
 import com.sabir.watchtracker.data.local.LibraryItem
 import com.sabir.watchtracker.data.local.LibraryStatus
 import com.sabir.watchtracker.data.repository.LibraryRepository
+import com.sabir.watchtracker.data.repository.TmdbRepository
+import java.time.LocalDate
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -149,6 +151,42 @@ data class LibraryUiState(
 
     val totalCount: Int
         get() = items.size
+
+    val watchedMovies: List<LibraryItem>
+        get() = movies.filter { it.watchDateEpochDay != null }
+
+    val watchedMovieCount: Int
+        get() = watchedMovies.size
+
+    val watchedEpisodeCount: Int
+        get() = episodeWatches.size
+
+    val movieWatchMinutes: Int
+        get() = watchedMovies.sumOf { it.runtimeMinutes ?: 0 }
+
+    val tvWatchMinutes: Int
+        get() = episodeWatches.sumOf { it.runtimeMinutes ?: 0 }
+
+    val totalWatchMinutes: Int
+        get() = movieWatchMinutes + tvWatchMinutes
+
+    val thisMonthCount: Int
+        get() {
+            val firstDay = LocalDate.now()
+                .withDayOfMonth(1)
+                .toEpochDay()
+
+            return watchedMovies.count {
+                (it.watchDateEpochDay ?: Long.MIN_VALUE) >= firstDay
+            } + episodeWatches.count {
+                it.watchedDateEpochDay >= firstDay
+            }
+        }
+
+    val averagePersonalRating: Double?
+        get() = items.mapNotNull { it.personalRating }
+            .takeIf { it.isNotEmpty() }
+            ?.average()
 }
 
 class LibraryViewModel(
@@ -158,6 +196,10 @@ class LibraryViewModel(
     private val repository = LibraryRepository(
         context = application.applicationContext
     )
+
+    private val tmdbRepository = TmdbRepository()
+
+    private val attemptedRuntimeIds = mutableSetOf<Int>()
 
     private val coroutineScope = CoroutineScope(
         SupervisorJob() + Dispatchers.Main.immediate
@@ -196,7 +238,30 @@ class LibraryViewModel(
                 }
                 .collect { state ->
                     uiState.value = state
+                    backfillMovieRuntimes(state.items)
                 }
+        }
+    }
+
+    private fun backfillMovieRuntimes(items: List<LibraryItem>) {
+        items.filter { item ->
+            item.mediaType == "movie" &&
+                item.watchDateEpochDay != null &&
+                item.runtimeMinutes == null &&
+                attemptedRuntimeIds.add(item.tmdbId)
+        }.forEach { movie ->
+            coroutineScope.launch(Dispatchers.IO) {
+                runCatching {
+                    tmdbRepository.getMovieDetails(movie.tmdbId).runtime
+                }.getOrNull()
+                    ?.takeIf { it > 0 }
+                    ?.let { runtime ->
+                        repository.updateMovieRuntime(
+                            tmdbId = movie.tmdbId,
+                            runtimeMinutes = runtime
+                        )
+                    }
+            }
         }
     }
 
