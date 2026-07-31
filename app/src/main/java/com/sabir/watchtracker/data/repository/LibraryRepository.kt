@@ -421,6 +421,11 @@ class LibraryRepository(
             )
         }
 
+        customListDao.removeTitleFromAllLists(
+            tmdbId = item.tmdbId,
+            mediaType = item.mediaType
+        )
+
         libraryItemDao.delete(item)
     }
 
@@ -433,6 +438,11 @@ class LibraryRepository(
                 tmdbId
             )
         }
+
+        customListDao.removeTitleFromAllLists(
+            tmdbId = tmdbId,
+            mediaType = mediaType
+        )
 
         libraryItemDao.deleteById(
             tmdbId = tmdbId,
