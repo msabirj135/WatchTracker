@@ -1,4 +1,4 @@
-﻿package com.sabir.watchtracker.data.local
+package com.sabir.watchtracker.data.local
 
 import androidx.room.Dao
 import androidx.room.Query
@@ -22,6 +22,11 @@ interface EpisodeWatchDao {
     @Upsert
     suspend fun upsert(
         episodeWatch: EpisodeWatch
+    )
+
+    @Upsert
+    suspend fun upsertAll(
+        episodeWatches: List<EpisodeWatch>
     )
 
     @Query(
