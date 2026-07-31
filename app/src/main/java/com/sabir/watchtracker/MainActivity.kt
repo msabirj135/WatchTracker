@@ -1,4 +1,4 @@
-﻿package com.sabir.watchtracker
+package com.sabir.watchtracker
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -30,6 +30,7 @@ import com.sabir.watchtracker.ui.library.HomeScreen
 import com.sabir.watchtracker.ui.library.LibraryItemDetailScreen
 import com.sabir.watchtracker.ui.library.LibraryScreen
 import com.sabir.watchtracker.ui.library.LibraryViewModel
+import com.sabir.watchtracker.ui.library.ListsScreen
 import com.sabir.watchtracker.ui.library.StatisticsScreen
 import com.sabir.watchtracker.ui.search.SearchScreen
 
@@ -108,6 +109,7 @@ private fun WatchTrackerApp(
         NavigationItem("Home", "⌂"),
         NavigationItem("Movies", "▶"),
         NavigationItem("TV Shows", "▣"),
+        NavigationItem("Lists", "☷"),
         NavigationItem("Stats", "◉")
     )
 
@@ -212,6 +214,19 @@ private fun WatchTrackerApp(
                             onItemClick = { item ->
                                 selectedLibraryItem = item
                             }
+                        )
+                    }
+
+                    3 -> {
+                        ListsScreen(
+                            paddingValues = innerPadding,
+                            state = libraryUiState,
+                            onCreateList = libraryViewModel::createCustomList,
+                            onUpdateList = libraryViewModel::updateCustomList,
+                            onDeleteList = libraryViewModel::deleteCustomList,
+                            onAddItem = libraryViewModel::addToCustomList,
+                            onRemoveItem = libraryViewModel::removeFromCustomList,
+                            onItemClick = { item -> selectedLibraryItem = item }
                         )
                     }
 
