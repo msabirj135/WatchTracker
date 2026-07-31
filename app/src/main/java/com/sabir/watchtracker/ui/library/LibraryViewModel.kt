@@ -4,6 +4,8 @@ import android.app.Application
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.AndroidViewModel
 import com.sabir.watchtracker.data.local.EpisodeWatch
+import com.sabir.watchtracker.data.local.CustomList
+import com.sabir.watchtracker.data.local.CustomListItem
 import com.sabir.watchtracker.data.local.LibraryItem
 import com.sabir.watchtracker.data.local.LibraryStatus
 import com.sabir.watchtracker.data.repository.LibraryRepository
@@ -24,10 +26,20 @@ data class WatchHistoryEntry(
     val watchedDateEpochDay: Long
 )
 
+data class MonthlyWatchList(
+    val year: Int,
+    val month: Int,
+    val label: String,
+    val entries: List<WatchHistoryEntry>,
+    val totalMinutes: Int
+)
+
 data class LibraryUiState(
     val isLoading: Boolean = true,
     val items: List<LibraryItem> = emptyList(),
     val episodeWatches: List<EpisodeWatch> = emptyList(),
+    val customLists: List<CustomList> = emptyList(),
+    val customListItems: List<CustomListItem> = emptyList(),
     val errorMessage: String? = null
 ) {
     val movies: List<LibraryItem>
@@ -187,6 +199,44 @@ data class LibraryUiState(
         get() = items.mapNotNull { it.personalRating }
             .takeIf { it.isNotEmpty() }
             ?.average()
+
+    val monthlyLists: List<MonthlyWatchList>
+        get() = watchHistoryEntries
+            .groupBy { entry ->
+                val date = LocalDate.ofEpochDay(entry.watchedDateEpochDay)
+                date.year to date.monthValue
+            }
+            .map { (yearMonth, entries) ->
+                val (year, month) = yearMonth
+                val minutes = entries.sumOf { entry ->
+                    if (entry.item.mediaType == "movie") {
+                        entry.item.runtimeMinutes ?: 0
+                    } else {
+                        val code = entry.detailText.substringBefore(" • ")
+                        episodeWatches.firstOrNull { watch ->
+                            watch.tmdbShowId == entry.item.tmdbId &&
+                                watch.episodeCode == code
+                        }?.runtimeMinutes ?: 0
+                    }
+                }
+                MonthlyWatchList(
+                    year = year,
+                    month = month,
+                    label = LocalDate.of(year, month, 1)
+                        .format(java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy")),
+                    entries = entries,
+                    totalMinutes = minutes
+                )
+            }
+            .sortedWith(compareByDescending<MonthlyWatchList> { it.year }.thenByDescending { it.month })
+
+    fun itemsForList(listId: Long): List<LibraryItem> {
+        val keys = customListItems
+            .filter { it.listId == listId }
+            .map { it.tmdbId to it.mediaType }
+            .toSet()
+        return items.filter { (it.tmdbId to it.mediaType) in keys }
+    }
 }
 
 class LibraryViewModel(
@@ -218,12 +268,16 @@ class LibraryViewModel(
         coroutineScope.launch {
             combine(
                 repository.observeAll(),
-                repository.observeAllEpisodeWatches()
-            ) { items, episodeWatches ->
+                repository.observeAllEpisodeWatches(),
+                repository.observeCustomLists(),
+                repository.observeCustomListItems()
+            ) { items, episodeWatches, customLists, customListItems ->
                 LibraryUiState(
                     isLoading = false,
                     items = items,
                     episodeWatches = episodeWatches,
+                    customLists = customLists,
+                    customListItems = customListItems,
                     errorMessage = null
                 )
             }
@@ -241,6 +295,30 @@ class LibraryViewModel(
                     backfillMovieRuntimes(state.items)
                 }
         }
+    }
+
+    fun createCustomList(name: String, description: String) {
+        coroutineScope.launch {
+            repository.createCustomList(name, description)
+        }
+    }
+
+    fun updateCustomList(list: CustomList, name: String, description: String) {
+        coroutineScope.launch {
+            repository.updateCustomList(list, name, description)
+        }
+    }
+
+    fun addToCustomList(listId: Long, item: LibraryItem) {
+        coroutineScope.launch { repository.addToCustomList(listId, item) }
+    }
+
+    fun removeFromCustomList(listId: Long, item: LibraryItem) {
+        coroutineScope.launch { repository.removeFromCustomList(listId, item) }
+    }
+
+    fun deleteCustomList(listId: Long) {
+        coroutineScope.launch { repository.deleteCustomList(listId) }
     }
 
     private fun backfillMovieRuntimes(items: List<LibraryItem>) {
