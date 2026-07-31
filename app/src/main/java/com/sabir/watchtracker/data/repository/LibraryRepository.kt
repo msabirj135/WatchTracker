@@ -25,6 +25,10 @@ class LibraryRepository(
         return libraryItemDao.observeAll()
     }
 
+    fun observeAllEpisodeWatches(): Flow<List<EpisodeWatch>> {
+        return episodeWatchDao.observeAll()
+    }
+
     fun observeMovies(): Flow<List<LibraryItem>> {
         return libraryItemDao.observeMovies()
     }
