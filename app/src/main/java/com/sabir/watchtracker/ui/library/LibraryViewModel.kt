@@ -35,6 +35,12 @@ data class MonthlyWatchList(
 ) {
     val activityCount: Int
         get() = entries.sumOf { it.watchedCount }
+
+    val movieCount: Int
+        get() = entries.count { it.item.mediaType == "movie" }
+
+    val tvShowCount: Int
+        get() = entries.count { it.item.mediaType == "tv" }
 }
 
 data class MonthlyGridEntry(
