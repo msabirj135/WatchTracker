@@ -2,6 +2,14 @@ package com.sabir.watchtracker.data.remote
 
 import com.google.gson.annotations.SerializedName
 
+data class TmdbMovieDetails(
+    @SerializedName("id")
+    val id: Int,
+
+    @SerializedName("runtime")
+    val runtime: Int? = null
+)
+
 data class TmdbSearchResponse(
     @SerializedName("page")
     val page: Int = 1,
