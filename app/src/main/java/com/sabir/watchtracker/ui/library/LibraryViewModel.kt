@@ -30,9 +30,26 @@ data class MonthlyWatchList(
     val year: Int,
     val month: Int,
     val label: String,
-    val entries: List<WatchHistoryEntry>,
+    val entries: List<MonthlyGridEntry>,
     val totalMinutes: Int
-)
+) {
+    val activityCount: Int
+        get() = entries.sumOf { it.watchedCount }
+}
+
+data class MonthlyGridEntry(
+    val item: LibraryItem,
+    val episodes: List<EpisodeWatch>,
+    val overallWatchedEpisodes: Int,
+    val watchedDateEpochDay: Long,
+    val totalMinutes: Int
+) {
+    val key: String
+        get() = "${item.mediaType}-${item.tmdbId}"
+
+    val watchedCount: Int
+        get() = if (item.mediaType == "tv") episodes.size else 1
+}
 
 data class LibraryUiState(
     val isLoading: Boolean = true,
@@ -208,24 +225,49 @@ data class LibraryUiState(
             }
             .map { (yearMonth, entries) ->
                 val (year, month) = yearMonth
-                val minutes = entries.sumOf { entry ->
-                    if (entry.item.mediaType == "movie") {
-                        entry.item.runtimeMinutes ?: 0
-                    } else {
-                        val code = entry.detailText.substringBefore(" • ")
-                        episodeWatches.firstOrNull { watch ->
-                            watch.tmdbShowId == entry.item.tmdbId &&
-                                watch.episodeCode == code
-                        }?.runtimeMinutes ?: 0
+                val groupedEntries = entries
+                    .groupBy { it.item.mediaType to it.item.tmdbId }
+                    .map { (_, titleEntries) ->
+                        val item = titleEntries.first().item
+                        val monthlyEpisodes = if (item.mediaType == "tv") {
+                            episodeWatches.filter { watch ->
+                                val date = LocalDate.ofEpochDay(watch.watchedDateEpochDay)
+                                watch.tmdbShowId == item.tmdbId &&
+                                    date.year == year &&
+                                    date.monthValue == month
+                            }.sortedWith(
+                                compareBy<EpisodeWatch> { it.watchedDateEpochDay }
+                                    .thenBy { it.seasonNumber }
+                                    .thenBy { it.episodeNumber }
+                            )
+                        } else {
+                            emptyList()
+                        }
+
+                        MonthlyGridEntry(
+                            item = item,
+                            episodes = monthlyEpisodes,
+                            overallWatchedEpisodes = if (item.mediaType == "tv") {
+                                episodeWatches.count { it.tmdbShowId == item.tmdbId }
+                            } else {
+                                0
+                            },
+                            watchedDateEpochDay = titleEntries.maxOf { it.watchedDateEpochDay },
+                            totalMinutes = if (item.mediaType == "movie") {
+                                item.runtimeMinutes ?: 0
+                            } else {
+                                monthlyEpisodes.sumOf { it.runtimeMinutes ?: 0 }
+                            }
+                        )
                     }
-                }
+                    .sortedByDescending { it.watchedDateEpochDay }
                 MonthlyWatchList(
                     year = year,
                     month = month,
                     label = LocalDate.of(year, month, 1)
                         .format(java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy")),
-                    entries = entries,
-                    totalMinutes = minutes
+                    entries = groupedEntries,
+                    totalMinutes = groupedEntries.sumOf { it.totalMinutes }
                 )
             }
             .sortedWith(compareByDescending<MonthlyWatchList> { it.year }.thenByDescending { it.month })
