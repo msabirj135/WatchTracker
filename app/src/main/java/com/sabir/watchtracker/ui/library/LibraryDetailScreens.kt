@@ -48,6 +48,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import com.sabir.watchtracker.data.local.EpisodeWatch
 import com.sabir.watchtracker.data.local.LibraryItem
+import com.sabir.watchtracker.data.local.LibraryStatus
 import com.sabir.watchtracker.data.remote.TmdbEpisode
 import com.sabir.watchtracker.data.remote.TmdbSeasonDetails
 import com.sabir.watchtracker.ui.components.StarRatingSelector
@@ -437,6 +438,31 @@ private fun MovieDetailScreen(
                 isSaving = isSaving,
                 onRatingChange = onRatingChange
             )
+        }
+
+        if (item.status == LibraryStatus.WATCHING) {
+            item {
+                Button(
+                    onClick = {
+                        showDatePicker(
+                            context = context,
+                            initialEpochDay = LocalDate.now().toEpochDay(),
+                            onDateSelected = onUpdateWatchDate
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isSaving,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = DetailSuccess
+                    ),
+                    shape = RoundedCornerShape(13.dp)
+                ) {
+                    Text(
+                        text = "Mark movie completed",
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         }
 
         item {
