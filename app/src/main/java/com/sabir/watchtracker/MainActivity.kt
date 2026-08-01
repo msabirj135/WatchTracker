@@ -73,6 +73,7 @@ private fun WatchTrackerApp(
 ) {
     val libraryUiState by libraryViewModel.uiState
     val backupUiState by libraryViewModel.backupUiState
+    val upNextUiState by libraryViewModel.upNextUiState
 
     var selectedTab by remember {
         mutableIntStateOf(0)
@@ -183,9 +184,14 @@ private fun WatchTrackerApp(
                         HomeScreen(
                             paddingValues = innerPadding,
                             libraryUiState = libraryUiState,
+                            upNextUiState = upNextUiState,
                             onSearchClick = {
                                 searchIsOpen = true
                             },
+                            onMarkUpNextWatched =
+                                libraryViewModel::markUpNextWatched,
+                            onRetryUpNext =
+                                libraryViewModel::retryUpNext,
                             onItemClick = { item ->
                                 selectedLibraryItem = item
                             }
