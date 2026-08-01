@@ -278,6 +278,10 @@ class LibraryRepository(
             } else {
                 existingItem?.watchMethod
             },
+            originalTitle = result.originalTitle
+                ?: existingItem?.originalTitle,
+            originalLanguage = result.originalLanguage
+                ?: existingItem?.originalLanguage,
             addedAt = existingItem?.addedAt
                 ?: currentTime,
             updatedAt = currentTime
