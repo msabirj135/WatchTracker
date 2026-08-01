@@ -28,6 +28,7 @@ data class LibraryItem(
     val totalSeasons: Int?,
     val totalEpisodes: Int?,
     val runtimeMinutes: Int?,
+    val genreNames: String? = null,
     val addedAt: Long,
     val updatedAt: Long
 ) {
@@ -53,6 +54,13 @@ data class LibraryItem(
         get() = backdropPath?.let { path ->
             "${BuildConfig.TMDB_PROXY_BASE_URL.trimEnd('/')}/image/t/p/w780$path"
         }
+
+    val genres: List<String>
+        get() = genreNames
+            ?.split("|")
+            ?.map { value -> value.trim() }
+            ?.filter { value -> value.isNotBlank() }
+            .orEmpty()
 
     val episodeProgressText: String?
         get() {
