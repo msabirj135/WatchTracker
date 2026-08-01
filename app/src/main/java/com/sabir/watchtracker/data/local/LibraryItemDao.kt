@@ -14,6 +14,17 @@ interface LibraryItemDao {
         item: LibraryItem
     )
 
+    @Upsert
+    suspend fun upsertAll(
+        items: List<LibraryItem>
+    )
+
+    @Query("SELECT * FROM library_items")
+    suspend fun getAllSnapshot(): List<LibraryItem>
+
+    @Query("DELETE FROM library_items")
+    suspend fun deleteAll()
+
     @Delete
     suspend fun delete(
         item: LibraryItem
