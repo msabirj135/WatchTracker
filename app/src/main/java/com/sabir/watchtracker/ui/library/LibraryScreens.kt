@@ -1313,7 +1313,7 @@ private fun LibraryGridCard(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(112.dp)
+                    .height(124.dp)
                     .padding(9.dp)
             ) {
                 Text(
