@@ -2,6 +2,7 @@
 
 import android.app.DatePickerDialog
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -63,6 +64,7 @@ fun HomeScreen(
     upNextUiState: UpNextUiState,
     onSearchClick: () -> Unit,
     onSettingsClick: () -> Unit,
+    onHistoryClick: () -> Unit,
     onMarkUpNextWatched: (UpNextEntry, Long) -> Unit,
     onRetryUpNext: () -> Unit,
     onItemClick: (LibraryItem) -> Unit
@@ -173,7 +175,8 @@ fun HomeScreen(
         item {
             SectionHeader(
                 title = "Watch history",
-                action = ""
+                action = "See all",
+                onActionClick = onHistoryClick
             )
         }
 
@@ -400,7 +403,8 @@ private fun SummaryCard(
 @Composable
 private fun SectionHeader(
     title: String,
-    action: String
+    action: String,
+    onActionClick: (() -> Unit)? = null
 ) {
     Row(
         modifier = Modifier
@@ -424,6 +428,10 @@ private fun SectionHeader(
         if (action.isNotEmpty()) {
             Text(
                 text = action,
+                modifier = Modifier.clickable(
+                    enabled = onActionClick != null,
+                    onClick = { onActionClick?.invoke() }
+                ),
                 color = ScreenPrimary,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold
