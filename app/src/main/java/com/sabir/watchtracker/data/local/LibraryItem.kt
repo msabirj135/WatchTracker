@@ -1,6 +1,7 @@
-package com.sabir.watchtracker.data.local
+﻿package com.sabir.watchtracker.data.local
 
 import androidx.room.Entity
+import com.sabir.watchtracker.BuildConfig
 
 @Entity(
     tableName = "library_items",
@@ -45,12 +46,12 @@ data class LibraryItem(
 
     val posterUrl: String?
         get() = posterPath?.let { path ->
-            "https://image.tmdb.org/t/p/w500$path"
+            "${BuildConfig.TMDB_PROXY_BASE_URL.trimEnd('/')}/image/t/p/w500$path"
         }
 
     val backdropUrl: String?
         get() = backdropPath?.let { path ->
-            "https://image.tmdb.org/t/p/w780$path"
+            "${BuildConfig.TMDB_PROXY_BASE_URL.trimEnd('/')}/image/t/p/w780$path"
         }
 
     val episodeProgressText: String?
