@@ -1313,7 +1313,13 @@ private fun LibraryGridCard(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(136.dp)
+                    .height(
+                        if (item.mediaType == "tv") {
+                            136.dp
+                        } else {
+                            108.dp
+                        }
+                    )
                     .padding(9.dp)
             ) {
                 Text(
@@ -1348,23 +1354,19 @@ private fun LibraryGridCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.height(5.dp))
-                Text(
-                    text = if (item.mediaType == "tv") {
-                        val total = item.totalEpisodes?.takeIf { it > 0 }
-                            ?: watchedEpisodeCount
-                        "$watchedEpisodeCount/$total overall • ${formatWatchTime(watchedEpisodeMinutes)}"
-                    } else {
-                        item.watchDateEpochDay?.let { date ->
-                            "${formatCompactEpochDay(date)} • ${item.displayYear}"
-                        } ?: item.displayYear
-                    },
-                    color = ScreenTextSecondary,
-                    fontSize = 8.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(5.dp))
                 if (item.mediaType == "tv") {
+                    Text(
+                        text = run {
+                            val total = item.totalEpisodes?.takeIf { it > 0 }
+                                ?: watchedEpisodeCount
+                            "$watchedEpisodeCount/$total overall • ${formatWatchTime(watchedEpisodeMinutes)}"
+                        },
+                        color = ScreenTextSecondary,
+                        fontSize = 8.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(5.dp))
                     Text(
                         text = item.watchDateEpochDay?.let { date ->
                             "Last • ${formatCompactEpochDay(date)}"
@@ -1375,16 +1377,36 @@ private fun LibraryGridCard(
                         overflow = TextOverflow.Ellipsis
                     )
                 } else {
-                    Text(
-                        text = item.personalRating?.let { rating ->
-                            "★ ${formatRating(rating)}"
-                        } ?: "Not rated",
-                        color = if (item.personalRating != null) ScreenWarning else ScreenTextSecondary,
-                        fontSize = 8.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = item.watchDateEpochDay?.let { date ->
+                                formatCompactEpochDay(date)
+                            } ?: "Not watched",
+                            color = ScreenTextSecondary,
+                            fontSize = 8.sp,
+                            maxLines = 1
+                        )
+                        Text(
+                            text = " • ",
+                            color = ScreenTextSecondary,
+                            fontSize = 8.sp
+                        )
+                        Text(
+                            text = item.personalRating?.let { rating ->
+                                "★ ${formatRating(rating)}"
+                            } ?: "Not rated",
+                            modifier = Modifier.weight(1f),
+                            color = if (item.personalRating != null) {
+                                ScreenWarning
+                            } else {
+                                ScreenTextSecondary
+                            },
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
         }
