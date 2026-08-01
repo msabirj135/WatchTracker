@@ -8,7 +8,18 @@ data class TmdbMovieDetails(
     val id: Int,
 
     @SerializedName("runtime")
-    val runtime: Int? = null
+    val runtime: Int? = null,
+
+    @SerializedName("genres")
+    val genres: List<TmdbGenre> = emptyList()
+)
+
+data class TmdbGenre(
+    @SerializedName("id")
+    val id: Int,
+
+    @SerializedName("name")
+    val name: String
 )
 
 data class TmdbSearchResponse(
@@ -60,7 +71,10 @@ data class TmdbSearchResult(
     val firstAirDate: String? = null,
 
     @SerializedName("vote_average")
-    val voteAverage: Double = 0.0
+    val voteAverage: Double = 0.0,
+
+    @SerializedName("genre_ids")
+    val genreIds: List<Int> = emptyList()
 ) {
     val displayTitle: String
         get() = movieTitle
