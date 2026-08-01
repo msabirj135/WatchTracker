@@ -170,11 +170,18 @@ data class LibraryUiState(
             )
         }.sortedByDescending { entry -> entry.latestVisitEpochDay }
 
-    val theatreVisitCount: Int
-        get() = theatreWatchEntries.sumOf { it.visitCount }
-
     val theatreWatchMinutes: Int
         get() = theatreWatchEntries.sumOf { it.totalMinutes }
+
+    val theatreMoviesThisYear: Int
+        get() {
+            val currentYear = LocalDate.now().year
+            return theatreWatchEntries.count { entry ->
+                entry.visitDates.any { date ->
+                    LocalDate.ofEpochDay(date).year == currentYear
+                }
+            }
+        }
 
     val movies: List<LibraryItem>
         get() = items
