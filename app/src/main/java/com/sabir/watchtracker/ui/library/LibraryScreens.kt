@@ -1604,6 +1604,10 @@ fun StatisticsScreen(
 
         item { WatchTimeHeroCard(libraryUiState) }
 
+        if (libraryUiState.theatreWatchEntries.isNotEmpty()) {
+            item { TheatreStatisticsCard(libraryUiState) }
+        }
+
         item {
             StatisticsYearSelector(
                 years = availableYears,
@@ -1675,6 +1679,73 @@ fun StatisticsScreen(
 
         item { WatchTimeSplitCard(libraryUiState) }
         item { StatusDistributionCard(libraryUiState) }
+    }
+}
+
+@Composable
+private fun TheatreStatisticsCard(state: LibraryUiState) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = ScreenSurface)
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(46.dp)
+                        .background(
+                            ScreenPrimary.copy(alpha = 0.14f),
+                            RoundedCornerShape(14.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(text = "🎟", fontSize = 21.sp)
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column {
+                    Text(
+                        text = "Theatre watches",
+                        color = ScreenTextPrimary,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Your movies watched on the big screen",
+                        color = ScreenTextSecondary,
+                        fontSize = 10.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                AnnualMetric(
+                    modifier = Modifier.weight(1f),
+                    value = state.theatreWatchEntries.size.toString(),
+                    label = "Movies"
+                )
+                AnnualMetric(
+                    modifier = Modifier.weight(1f),
+                    value = state.theatreMoviesThisYear.toString(),
+                    label = "This year"
+                )
+                AnnualMetric(
+                    modifier = Modifier.weight(1f),
+                    value = formatWatchTime(state.theatreWatchMinutes),
+                    label = "Watch time"
+                )
+            }
+        }
     }
 }
 
