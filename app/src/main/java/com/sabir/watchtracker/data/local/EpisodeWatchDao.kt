@@ -133,4 +133,7 @@ interface EpisodeWatchDao {
     suspend fun deleteForShow(
         tmdbShowId: Int
     )
+
+    @Query("DELETE FROM episode_watches WHERE tmdbShowId NOT IN (SELECT tmdbId FROM library_items WHERE mediaType = 'tv')")
+    suspend fun deleteOrphanWatches(): Int
 }
