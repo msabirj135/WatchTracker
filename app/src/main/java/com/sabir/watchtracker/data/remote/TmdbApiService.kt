@@ -1,4 +1,4 @@
-package com.sabir.watchtracker.data.remote
+﻿package com.sabir.watchtracker.data.remote
 
 import retrofit2.http.GET
 import retrofit2.http.Path
@@ -26,6 +26,54 @@ interface TmdbApiService {
         @Query("page")
         page: Int = 1
     ): TmdbSearchResponse
+
+    @GET("3/search/movie")
+    suspend fun searchMovies(
+        @Query("query")
+        query: String,
+
+        @Query("primary_release_year")
+        releaseYear: Int,
+
+        @Query("include_adult")
+        includeAdult: Boolean = false,
+
+        @Query("language")
+        language: String = "en-US",
+
+        @Query("page")
+        page: Int = 1
+    ): TmdbSearchResponse
+
+    @GET("3/search/tv")
+    suspend fun searchTvShows(
+        @Query("query")
+        query: String,
+
+        @Query("first_air_date_year")
+        firstAirDateYear: Int,
+
+        @Query("include_adult")
+        includeAdult: Boolean = false,
+
+        @Query("language")
+        language: String = "en-US",
+
+        @Query("page")
+        page: Int = 1
+    ): TmdbSearchResponse
+
+    @GET("3/find/{externalId}")
+    suspend fun findByExternalId(
+        @Path("externalId")
+        externalId: String,
+
+        @Query("external_source")
+        externalSource: String = "imdb_id",
+
+        @Query("language")
+        language: String = "en-US"
+    ): TmdbFindResponse
 
     @GET("3/tv/{seriesId}")
     suspend fun getTvDetails(
