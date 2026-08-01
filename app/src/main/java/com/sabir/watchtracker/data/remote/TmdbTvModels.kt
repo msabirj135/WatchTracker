@@ -28,6 +28,15 @@ data class TmdbTvDetails(
     @SerializedName("status")
     val productionStatus: String = "",
 
+    @SerializedName("in_production")
+    val inProduction: Boolean = false,
+
+    @SerializedName("next_episode_to_air")
+    val nextEpisodeToAir: TmdbEpisode? = null,
+
+    @SerializedName("last_episode_to_air")
+    val lastEpisodeToAir: TmdbEpisode? = null,
+
     @SerializedName("number_of_seasons")
     val numberOfSeasons: Int = 0,
 
@@ -131,4 +140,19 @@ data class TmdbEpisode(
         get() = stillPath?.let { path ->
             "${BuildConfig.TMDB_PROXY_BASE_URL.trimEnd('/')}/image/t/p/w500$path"
         }
+
+    val parsedAirDate: java.time.LocalDate?
+        get() = airDate
+            ?.takeIf { value -> value.isNotBlank() }
+            ?.let { value ->
+                runCatching {
+                    java.time.LocalDate.parse(value)
+                }.getOrNull()
+            }
+
+    val hasAired: Boolean
+        get() = parsedAirDate
+            ?.isAfter(java.time.LocalDate.now())
+            ?.not()
+            ?: true
 }
