@@ -58,13 +58,42 @@ private val ListsPrimary = Color(0xFFE63946)
 private val ListsText = Color(0xFFF5F5F7)
 private val ListsMuted = Color(0xFF9A9DA8)
 
+private val listColors = listOf(
+    "red" to ListsPrimary,
+    "blue" to Color(0xFF4D8DFF),
+    "green" to Color(0xFF36C98F),
+    "amber" to Color(0xFFFFB84D),
+    "purple" to Color(0xFFA879FF)
+)
+
+private val listIcons = listOf(
+    "list" to "☷",
+    "heart" to "♥",
+    "star" to "★",
+    "film" to "▶",
+    "bookmark" to "◆"
+)
+
+private enum class CustomListSort(val label: String) {
+    ADDED("Added"),
+    TITLE("A–Z"),
+    RECENT("Recently watched")
+}
+
+private fun listAccent(key: String?): Color =
+    listColors.firstOrNull { it.first == key }?.second ?: ListsPrimary
+
+private fun listIcon(key: String?): String =
+    listIcons.firstOrNull { it.first == key }?.second ?: "☷"
+
 @Composable
 fun ListsScreen(
     paddingValues: PaddingValues,
     state: LibraryUiState,
     onBackClick: () -> Unit,
-    onCreateList: (String, String) -> Unit,
-    onUpdateList: (CustomList, String, String) -> Unit,
+    onCreateList: (String, String, String, String) -> Unit,
+    onUpdateList: (CustomList, String, String, String, String) -> Unit,
+    onDuplicateList: (CustomList) -> Unit,
     onDeleteList: (Long) -> Unit,
     onAddItem: (Long, LibraryItem) -> Unit,
     onRemoveItem: (Long, LibraryItem) -> Unit,
@@ -115,6 +144,10 @@ fun ListsScreen(
             onBack = { selectedList = null },
             onAdd = { showAddTitles = true },
             onEdit = { editingList = selectedList },
+            onDuplicate = {
+                onDuplicateList(selectedList!!)
+                selectedList = null
+            },
             onDelete = {
                 onDeleteList(selectedList!!.id)
                 selectedList = null
@@ -138,9 +171,11 @@ fun ListsScreen(
             title = "Create list",
             initialName = "",
             initialDescription = "",
+            initialColorKey = "red",
+            initialIconKey = "list",
             onDismiss = { showCreateDialog = false },
-            onSave = { name, description ->
-                onCreateList(name, description)
+            onSave = { name, description, colorKey, iconKey ->
+                onCreateList(name, description, colorKey, iconKey)
                 showCreateDialog = false
             }
         )
@@ -151,12 +186,16 @@ fun ListsScreen(
             title = "Edit list",
             initialName = list.name,
             initialDescription = list.description,
+            initialColorKey = list.colorKey ?: "red",
+            initialIconKey = list.iconKey ?: "list",
             onDismiss = { editingList = null },
-            onSave = { name, description ->
-                onUpdateList(list, name, description)
+            onSave = { name, description, colorKey, iconKey ->
+                onUpdateList(list, name, description, colorKey, iconKey)
                 selectedList = list.copy(
                     name = name.trim(),
-                    description = description.trim()
+                    description = description.trim(),
+                    colorKey = colorKey,
+                    iconKey = iconKey
                 )
                 editingList = null
             }
@@ -243,12 +282,13 @@ private fun ListsOverview(
                         modifier = Modifier.fillMaxWidth().padding(18.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        val accent = listAccent(list.colorKey)
                         Box(
                             modifier = Modifier.size(48.dp).background(
-                                ListsPrimary.copy(alpha = .14f), RoundedCornerShape(14.dp)
+                                accent.copy(alpha = .14f), RoundedCornerShape(14.dp)
                             ),
                             contentAlignment = Alignment.Center
-                        ) { Text("☷", color = ListsPrimary, fontSize = 23.sp) }
+                        ) { Text(listIcon(list.iconKey), color = accent, fontSize = 23.sp) }
                         Spacer(Modifier.width(14.dp))
                         Column(Modifier.weight(1f)) {
                             Text(list.name, color = ListsText, fontSize = 16.sp, fontWeight = FontWeight.Bold)
@@ -468,10 +508,19 @@ private fun CustomListDetail(
     onBack: () -> Unit,
     onAdd: () -> Unit,
     onEdit: () -> Unit,
+    onDuplicate: () -> Unit,
     onDelete: () -> Unit,
     onRemove: (LibraryItem) -> Unit,
     onItemClick: (LibraryItem) -> Unit
 ) {
+    var sortMode by remember(list.id) { mutableStateOf(CustomListSort.ADDED) }
+    val sortedItems = remember(items, sortMode) {
+        when (sortMode) {
+            CustomListSort.ADDED -> items
+            CustomListSort.TITLE -> items.sortedBy { it.title.lowercase() }
+            CustomListSort.RECENT -> items.sortedByDescending { it.watchDateEpochDay ?: Long.MIN_VALUE }
+        }
+    }
     LazyVerticalGrid(
         columns = GridCells.Fixed(3),
         modifier = Modifier.fillMaxSize().background(ListsBackground).padding(paddingValues),
@@ -486,13 +535,34 @@ private fun CustomListDetail(
             }
         }
         item(span = { GridItemSpan(maxLineSpan) }) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Button(
                     onClick = onAdd,
+                    modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = ListsPrimary)
                 ) { Text("+ Add titles") }
-                OutlinedButton(onClick = onEdit) { Text("Edit") }
-                TextButton(onClick = onDelete) { Text("Delete", color = ListsPrimary) }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    OutlinedButton(onClick = onEdit) { Text("Edit") }
+                    OutlinedButton(onClick = onDuplicate) { Text("Duplicate") }
+                    TextButton(onClick = onDelete) { Text("Delete", color = ListsPrimary) }
+                }
+            }
+        }
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                CustomListSort.entries.forEach { option ->
+                    TextButton(onClick = { sortMode = option }) {
+                        Text(
+                            option.label,
+                            color = if (sortMode == option) listAccent(list.colorKey) else ListsMuted,
+                            fontSize = 11.sp,
+                            fontWeight = if (sortMode == option) FontWeight.Bold else FontWeight.Normal
+                        )
+                    }
+                }
             }
         }
         if (items.isEmpty()) {
@@ -500,7 +570,7 @@ private fun CustomListDetail(
                 EmptyListCard("No titles yet. Tap Add titles to build this list.")
             }
         }
-        items(items, key = { "${it.mediaType}-${it.tmdbId}" }) { item ->
+        items(sortedItems, key = { "${it.mediaType}-${it.tmdbId}" }) { item ->
             CustomPosterCard(item, { onItemClick(item) }, { onRemove(item) })
         }
     }
@@ -603,11 +673,15 @@ private fun ListEditorDialog(
     title: String,
     initialName: String,
     initialDescription: String,
+    initialColorKey: String,
+    initialIconKey: String,
     onDismiss: () -> Unit,
-    onSave: (String, String) -> Unit
+    onSave: (String, String, String, String) -> Unit
 ) {
     var name by remember(initialName) { mutableStateOf(initialName) }
     var description by remember(initialDescription) { mutableStateOf(initialDescription) }
+    var colorKey by remember(initialColorKey) { mutableStateOf(initialColorKey) }
+    var iconKey by remember(initialIconKey) { mutableStateOf(initialIconKey) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
@@ -625,10 +699,37 @@ private fun ListEditorDialog(
                     label = { Text("Description (optional)") },
                     maxLines = 3
                 )
+                Text("Color", fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listColors.forEach { option ->
+                        Button(
+                            onClick = { colorKey = option.first },
+                            modifier = Modifier.size(if (colorKey == option.first) 42.dp else 36.dp),
+                            contentPadding = PaddingValues(0.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = option.second),
+                            shape = RoundedCornerShape(12.dp)
+                        ) { Text(if (colorKey == option.first) "✓" else "") }
+                    }
+                }
+                Text("Icon", fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listIcons.forEach { option ->
+                        OutlinedButton(
+                            onClick = { iconKey = option.first },
+                            modifier = Modifier.size(42.dp),
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Text(
+                                option.second,
+                                color = if (iconKey == option.first) listAccent(colorKey) else ListsMuted
+                            )
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSave(name, description) }, enabled = name.isNotBlank()) {
+            TextButton(onClick = { onSave(name, description, colorKey, iconKey) }, enabled = name.isNotBlank()) {
                 Text("Save")
             }
         },
@@ -644,16 +745,41 @@ private fun TitlePickerDialog(
     onAdd: (LibraryItem) -> Unit,
     onRemove: (LibraryItem) -> Unit
 ) {
+    var query by remember { mutableStateOf("") }
+    var mediaFilter by remember { mutableStateOf("all") }
     val selectedKeys = selectedItems.map { it.tmdbId to it.mediaType }.toSet()
+    val visibleItems = allItems.filter { item ->
+        (mediaFilter == "all" || item.mediaType == mediaFilter) &&
+            (query.isBlank() || item.title.contains(query.trim(), ignoreCase = true))
+    }.sortedBy { it.title.lowercase() }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Add titles") },
         text = {
-            LazyColumn(
-                modifier = Modifier.height(420.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                columnItems(allItems, key = { "pick-${it.mediaType}-${it.tmdbId}" }) { item ->
+            Column {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Search your library") },
+                    singleLine = true
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf("all" to "All", "movie" to "Movies", "tv" to "TV").forEach { filter ->
+                        TextButton(onClick = { mediaFilter = filter.first }) {
+                            Text(
+                                filter.second,
+                                color = if (mediaFilter == filter.first) ListsPrimary else ListsMuted,
+                                fontWeight = if (mediaFilter == filter.first) FontWeight.Bold else FontWeight.Normal
+                            )
+                        }
+                    }
+                }
+                LazyColumn(
+                    modifier = Modifier.height(350.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    columnItems(visibleItems, key = { "pick-${it.mediaType}-${it.tmdbId}" }) { item ->
                     val selected = (item.tmdbId to item.mediaType) in selectedKeys
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -667,6 +793,16 @@ private fun TitlePickerDialog(
                         )
                         TextButton(onClick = { if (selected) onRemove(item) else onAdd(item) }) {
                             Text(if (selected) "Remove" else "Add")
+                        }
+                    }
+                }
+                    if (visibleItems.isEmpty()) {
+                        item {
+                            Text(
+                                "No matching titles",
+                                modifier = Modifier.fillMaxWidth().padding(20.dp),
+                                color = ListsMuted
+                            )
                         }
                     }
                 }
