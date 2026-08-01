@@ -1317,7 +1317,7 @@ private fun LibraryGridCard(
                         if (item.mediaType == "tv") {
                             136.dp
                         } else {
-                            108.dp
+                            100.dp
                         }
                     )
                     .padding(9.dp)
@@ -1377,36 +1377,15 @@ private fun LibraryGridCard(
                         overflow = TextOverflow.Ellipsis
                     )
                 } else {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = item.watchDateEpochDay?.let { date ->
-                                formatCompactEpochDay(date)
-                            } ?: "Not watched",
-                            color = ScreenTextSecondary,
-                            fontSize = 8.sp,
-                            maxLines = 1
-                        )
-                        Text(
-                            text = " • ",
-                            color = ScreenTextSecondary,
-                            fontSize = 8.sp
-                        )
-                        Text(
-                            text = item.personalRating?.let { rating ->
-                                "★ ${formatRating(rating)}"
-                            } ?: "Not rated",
-                            modifier = Modifier.weight(1f),
-                            color = if (item.personalRating != null) {
-                                ScreenWarning
-                            } else {
-                                ScreenTextSecondary
-                            },
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+                    Text(
+                        text = item.watchDateEpochDay?.let { date ->
+                            formatCompactEpochDay(date)
+                        } ?: "Not watched",
+                        color = ScreenTextSecondary,
+                        fontSize = 8.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
         }
@@ -1479,6 +1458,33 @@ private fun LibraryPoster(
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold
             )
+        }
+
+        if (
+            item.mediaType == "movie" &&
+            item.personalRating != null
+        ) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(7.dp)
+                    .background(
+                        color = Color.Black.copy(alpha = 0.78f),
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    .padding(
+                        horizontal = 7.dp,
+                        vertical = 4.dp
+                    )
+            ) {
+                Text(
+                    text = "★ ${formatRating(item.personalRating)}",
+                    color = ScreenWarning,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
+                )
+            }
         }
     }
 }
