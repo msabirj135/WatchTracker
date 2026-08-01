@@ -12,11 +12,13 @@ import com.sabir.watchtracker.data.local.CustomList
 import com.sabir.watchtracker.data.local.CustomListItem
 import com.sabir.watchtracker.data.local.LibraryItem
 import com.sabir.watchtracker.data.local.LibraryStatus
+import com.sabir.watchtracker.data.remote.TmdbEpisode
 import com.sabir.watchtracker.data.repository.LibraryRepository
 import com.sabir.watchtracker.data.repository.TmdbRepository
 import java.time.LocalDate
 import java.time.YearMonth
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -24,6 +26,21 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+data class UpNextEntry(
+    val item: LibraryItem,
+    val episode: TmdbEpisode
+) {
+    val key: String
+        get() = "${item.tmdbId}-${episode.seasonNumber}-${episode.episodeNumber}"
+}
+
+data class UpNextUiState(
+    val isLoading: Boolean = false,
+    val entries: List<UpNextEntry> = emptyList(),
+    val savingShowIds: Set<Int> = emptySet(),
+    val errorMessage: String? = null
+)
 
 data class BackupUiState(
     val isWorking: Boolean = false,
@@ -374,6 +391,9 @@ class LibraryViewModel(
 
     private var pendingBackupJson: String? = null
 
+    private var upNextJob: Job? = null
+    private var upNextSignature: String? = null
+
     private val attemptedRuntimeIds = mutableSetOf<Int>()
 
     private val coroutineScope = CoroutineScope(
@@ -387,6 +407,11 @@ class LibraryViewModel(
 
     var backupUiState = mutableStateOf(
         BackupUiState()
+    )
+        private set
+
+    var upNextUiState = mutableStateOf(
+        UpNextUiState()
     )
         private set
 
@@ -423,8 +448,162 @@ class LibraryViewModel(
                 .collect { state ->
                     uiState.value = state
                     backfillMovieRuntimes(state.items)
+                    refreshUpNextIfNeeded(state)
                 }
         }
+    }
+
+    private fun refreshUpNextIfNeeded(state: LibraryUiState) {
+        val signature = state.continueWatching.joinToString("|") { item ->
+            buildString {
+                append(item.tmdbId)
+                append(":")
+                append(item.currentSeason)
+                append(":")
+                append(item.currentEpisode)
+                append(":")
+                append(item.updatedAt)
+            }
+        }
+
+        if (signature == upNextSignature) return
+        upNextSignature = signature
+        loadUpNext(state)
+    }
+
+    private fun loadUpNext(state: LibraryUiState = uiState.value) {
+        upNextJob?.cancel()
+
+        val shows = state.continueWatching
+        if (shows.isEmpty()) {
+            upNextUiState.value = UpNextUiState()
+            return
+        }
+
+        upNextUiState.value = upNextUiState.value.copy(
+            isLoading = true,
+            errorMessage = null
+        )
+
+        upNextJob = coroutineScope.launch {
+            val attempts = withContext(Dispatchers.IO) {
+                shows.map { show ->
+                    runCatching {
+                        findNextEpisode(
+                            show = show,
+                            watchedEpisodes = state.episodeWatches
+                                .filter { watch ->
+                                    watch.tmdbShowId == show.tmdbId
+                                }
+                        )
+                    }
+                }
+            }
+
+            val entries = attempts.mapNotNull { attempt ->
+                attempt.getOrNull()
+            }
+
+            val failedCount = attempts.count { attempt ->
+                attempt.isFailure
+            }
+
+            upNextUiState.value = upNextUiState.value.copy(
+                isLoading = false,
+                entries = entries,
+                errorMessage = if (
+                    entries.isEmpty() && failedCount == shows.size
+                ) {
+                    "Unable to load upcoming episodes."
+                } else {
+                    null
+                }
+            )
+        }
+    }
+
+    private suspend fun findNextEpisode(
+        show: LibraryItem,
+        watchedEpisodes: List<EpisodeWatch>
+    ): UpNextEntry? {
+        val watchedKeys = watchedEpisodes.map { watch ->
+            watch.seasonNumber to watch.episodeNumber
+        }.toSet()
+
+        val details = tmdbRepository.getTvDetails(show.tmdbId)
+
+        details.regularSeasons.forEach { seasonSummary ->
+            val season = tmdbRepository.getTvSeasonDetails(
+                seriesId = show.tmdbId,
+                seasonNumber = seasonSummary.seasonNumber
+            )
+
+            val nextEpisode = season.episodes
+                .sortedBy { episode -> episode.episodeNumber }
+                .firstOrNull { episode ->
+                    (episode.seasonNumber to episode.episodeNumber) !in
+                        watchedKeys && episode.isAvailableToWatch()
+                }
+
+            if (nextEpisode != null) {
+                return UpNextEntry(
+                    item = show,
+                    episode = nextEpisode
+                )
+            }
+        }
+
+        return null
+    }
+
+    private fun TmdbEpisode.isAvailableToWatch(): Boolean {
+        val date = airDate
+            ?.takeIf { value -> value.isNotBlank() }
+            ?: return true
+
+        return runCatching {
+            !LocalDate.parse(date).isAfter(LocalDate.now())
+        }.getOrDefault(true)
+    }
+
+    fun markUpNextWatched(
+        entry: UpNextEntry,
+        watchedDateEpochDay: Long
+    ) {
+        if (entry.item.tmdbId in upNextUiState.value.savingShowIds) {
+            return
+        }
+
+        upNextUiState.value = upNextUiState.value.copy(
+            savingShowIds = upNextUiState.value.savingShowIds +
+                entry.item.tmdbId,
+            errorMessage = null
+        )
+
+        coroutineScope.launch {
+            try {
+                repository.markEpisodeWatched(
+                    show = entry.item,
+                    episode = entry.episode,
+                    watchedDateEpochDay = watchedDateEpochDay
+                )
+            } catch (exception: Exception) {
+                upNextUiState.value = upNextUiState.value.copy(
+                    errorMessage = exception.message
+                        ?: "Unable to save the episode."
+                )
+            } finally {
+                upNextUiState.value = upNextUiState.value.copy(
+                    savingShowIds = upNextUiState.value.savingShowIds -
+                        entry.item.tmdbId
+                )
+            }
+        }
+    }
+
+    fun retryUpNext() {
+        upNextSignature = null
+        refreshUpNextIfNeeded(uiState.value)
     }
 
     fun createCustomList(name: String, description: String) {
