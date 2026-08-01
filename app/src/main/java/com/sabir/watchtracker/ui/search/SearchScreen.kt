@@ -96,7 +96,14 @@ fun SearchScreen(
 
         SearchFilters(
             selectedFilter = uiState.mediaFilter,
-            onFilterSelected = searchViewModel::updateMediaFilter
+            selectedYear = uiState.yearFilter,
+            selectedLanguage = uiState.languageFilter,
+            availableYears = uiState.availableYears,
+            availableLanguages = uiState.availableLanguages,
+            onFilterSelected = searchViewModel::updateMediaFilter,
+            onYearSelected = searchViewModel::updateYearFilter,
+            onLanguageSelected = searchViewModel::updateLanguageFilter,
+            onClearFilters = searchViewModel::clearResultFilters
         )
 
         SaveFeedback(
@@ -132,8 +139,10 @@ fun SearchScreen(
                 if (uiState.filteredResults.isEmpty()) {
                     MessageContent(
                         symbol = "⌕",
-                        title = "No ${uiState.mediaFilter.label.lowercase()} found",
-                        message = "Try the All filter or search another title."
+                        title = "No matching results",
+                        message = "Change or reset the filters to see more titles.",
+                        actionLabel = "Reset filters",
+                        onAction = searchViewModel::clearResultFilters
                     )
                 } else {
                     SearchResults(
@@ -203,28 +212,106 @@ fun SearchScreen(
 @Composable
 private fun SearchFilters(
     selectedFilter: SearchMediaFilter,
-    onFilterSelected: (SearchMediaFilter) -> Unit
+    selectedYear: Int?,
+    selectedLanguage: String?,
+    availableYears: List<Int>,
+    availableLanguages: List<Pair<String, String>>,
+    onFilterSelected: (SearchMediaFilter) -> Unit,
+    onYearSelected: (Int?) -> Unit,
+    onLanguageSelected: (String?) -> Unit,
+    onClearFilters: () -> Unit
 ) {
-    LazyRow(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 10.dp),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(
-            horizontal = 20.dp
-        ),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        items(SearchMediaFilter.entries) { filter ->
-            FilterChip(
-                selected = selectedFilter == filter,
-                onClick = { onFilterSelected(filter) },
-                label = {
-                    Text(
-                        text = filter.label,
-                        fontWeight = FontWeight.SemiBold
+    Column(modifier = Modifier.padding(top = 10.dp)) {
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                horizontal = 20.dp
+            ),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(SearchMediaFilter.entries) { filter ->
+                FilterChip(
+                    selected = selectedFilter == filter,
+                    onClick = { onFilterSelected(filter) },
+                    label = {
+                        Text(
+                            text = filter.label,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                )
+            }
+
+            if (
+                selectedFilter != SearchMediaFilter.ALL ||
+                selectedYear != null ||
+                selectedLanguage != null
+            ) {
+                item {
+                    TextButton(onClick = onClearFilters) {
+                        Text(
+                            text = "Reset",
+                            color = SearchPrimary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+
+        if (availableYears.isNotEmpty()) {
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                    horizontal = 20.dp
+                ),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                item {
+                    FilterChip(
+                        selected = selectedYear == null,
+                        onClick = { onYearSelected(null) },
+                        label = { Text("Any year") }
                     )
                 }
-            )
+
+                items(availableYears) { year ->
+                    FilterChip(
+                        selected = selectedYear == year,
+                        onClick = { onYearSelected(year) },
+                        label = { Text(year.toString()) }
+                    )
+                }
+            }
+        }
+
+        if (availableLanguages.isNotEmpty()) {
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                    horizontal = 20.dp
+                ),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                item {
+                    FilterChip(
+                        selected = selectedLanguage == null,
+                        onClick = { onLanguageSelected(null) },
+                        label = { Text("Any language") }
+                    )
+                }
+
+                items(
+                    items = availableLanguages,
+                    key = { (code, _) -> code }
+                ) { (code, name) ->
+                    FilterChip(
+                        selected = selectedLanguage == code,
+                        onClick = { onLanguageSelected(code) },
+                        label = { Text(name) }
+                    )
+                }
+            }
         }
     }
 }
