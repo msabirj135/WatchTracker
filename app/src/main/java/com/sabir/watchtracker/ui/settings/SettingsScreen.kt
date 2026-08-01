@@ -162,7 +162,7 @@ fun SettingsScreen(
         }
 
         item {
-            AppInformationCard()
+            ReleaseManagementCard()
         }
 
         item {
@@ -556,10 +556,51 @@ private fun DataHealthCard(
 }
 
 @Composable
-private fun AppInformationCard() {
-    SettingsCard(title = "About ReelTick") {
+private fun ReleaseManagementCard() {
+    SettingsCard(title = "Version & updates") {
         InformationRow("Version", BuildConfig.VERSION_NAME)
         InformationRow("Build", BuildConfig.VERSION_CODE.toString())
+        InformationRow("Release channel", BuildConfig.RELEASE_CHANNEL)
+        InformationRow(
+            "Database schema",
+            BuildConfig.DATABASE_SCHEMA_VERSION.toString()
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+        Text(
+            "What’s new in 1.1.0",
+            color = SettingsTextPrimary,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold
+        )
+        ReleaseNote("Richer title information and viewing timelines")
+        ReleaseNote("Custom list colors, icons, duplication and sorting")
+        ReleaseNote("Safe database health checks and repair")
+
+        Spacer(modifier = Modifier.height(14.dp))
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = SettingsSuccess.copy(alpha = 0.10f)
+            )
+        ) {
+            Column(modifier = Modifier.padding(13.dp)) {
+                Text(
+                    "Updating ReelTick safely",
+                    color = SettingsSuccess,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    "Create a backup, then install the newer APK over the existing app. Do not uninstall first. Updates must use the same package name and signing key.",
+                    modifier = Modifier.padding(top = 5.dp),
+                    color = SettingsTextSecondary,
+                    fontSize = 10.sp
+                )
+            }
+        }
+
         Text(
             text = "A private, personal movie and TV tracker.",
             modifier = Modifier
@@ -568,6 +609,25 @@ private fun AppInformationCard() {
             color = SettingsTextSecondary,
             fontSize = 12.sp,
             textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
+private fun ReleaseNote(text: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 7.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Text("•", color = SettingsPrimary, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text,
+            modifier = Modifier.weight(1f),
+            color = SettingsTextSecondary,
+            fontSize = 11.sp
         )
     }
 }
