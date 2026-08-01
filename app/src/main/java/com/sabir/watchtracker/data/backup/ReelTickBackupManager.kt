@@ -8,6 +8,7 @@ import com.sabir.watchtracker.data.local.CustomListItem
 import com.sabir.watchtracker.data.local.EpisodeWatch
 import com.sabir.watchtracker.data.local.LibraryItem
 import com.sabir.watchtracker.data.local.WatchTrackerDatabase
+import java.time.LocalDate
 
 private const val BACKUP_IDENTIFIER =
     "com.sabir.watchtracker.reeltick-backup"
@@ -69,6 +70,91 @@ class ReelTickBackupManager(
         }
 
         return gson.toJson(document)
+    }
+
+    suspend fun createHistoryCsv(): String {
+        val snapshot = database.withTransaction {
+            ReelTickBackupDocument(
+                libraryItems = libraryItemDao.getAllSnapshot(),
+                episodeWatches = episodeWatchDao.getAllSnapshot()
+            )
+        }
+
+        val itemsByKey = snapshot.libraryItems.associateBy { item ->
+            item.mediaType to item.tmdbId
+        }
+
+        val rows = mutableListOf<List<String>>()
+        rows += listOf(
+            "Title",
+            "Media Type",
+            "Episode",
+            "Episode Name",
+            "Watched Date",
+            "Status",
+            "Personal Rating",
+            "Runtime Minutes",
+            "Notes"
+        )
+
+        snapshot.libraryItems
+            .filter { item -> item.mediaType == "movie" }
+            .sortedByDescending { item ->
+                item.watchDateEpochDay ?: Long.MIN_VALUE
+            }
+            .forEach { movie ->
+                rows += listOf(
+                    movie.title,
+                    "Movie",
+                    "",
+                    "",
+                    movie.watchDateEpochDay
+                        ?.let { LocalDate.ofEpochDay(it).toString() }
+                        .orEmpty(),
+                    movie.status.displayName,
+                    movie.personalRating?.toString().orEmpty(),
+                    movie.runtimeMinutes?.toString().orEmpty(),
+                    movie.notes
+                )
+            }
+
+        snapshot.episodeWatches
+            .sortedByDescending { watch ->
+                watch.watchedDateEpochDay
+            }
+            .forEach { watch ->
+                val show = itemsByKey["tv" to watch.tmdbShowId]
+                    ?: return@forEach
+
+                rows += listOf(
+                    show.title,
+                    "TV Show",
+                    watch.episodeCode,
+                    watch.episodeName,
+                    LocalDate.ofEpochDay(
+                        watch.watchedDateEpochDay
+                    ).toString(),
+                    show.status.displayName,
+                    show.personalRating?.toString().orEmpty(),
+                    watch.runtimeMinutes?.toString().orEmpty(),
+                    show.notes
+                )
+            }
+
+        return rows.joinToString("\n") { row ->
+            row.joinToString(",") { value ->
+                "\"${value.replace("\"", "\"\"")}\""
+            }
+        }
+    }
+
+    suspend fun clearAllData() {
+        database.withTransaction {
+            customListDao.deleteAllItems()
+            customListDao.deleteAllLists()
+            episodeWatchDao.deleteAll()
+            libraryItemDao.deleteAll()
+        }
     }
 
     fun inspectBackupJson(json: String): BackupPreview {
