@@ -117,6 +117,12 @@ class LibraryRepository(
         customListDao.deleteList(listId)
     }
 
+    suspend fun repairOrphanedData(): Int {
+        return customListDao.deleteOrphanItems() +
+            episodeWatchDao.deleteOrphanWatches() +
+            rewatchRecordDao.deleteOrphanRecords()
+    }
+
     fun observeAll(): Flow<List<LibraryItem>> {
         return libraryItemDao.observeAll()
     }
