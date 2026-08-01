@@ -1,5 +1,6 @@
 ﻿package com.sabir.watchtracker.ui.library
 
+import android.app.DatePickerDialog
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -37,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -62,9 +64,14 @@ private val ScreenTextSecondary = Color(0xFF9A9DA8)
 fun HomeScreen(
     paddingValues: PaddingValues,
     libraryUiState: LibraryUiState,
+    upNextUiState: UpNextUiState,
     onSearchClick: () -> Unit,
+    onMarkUpNextWatched: (UpNextEntry, Long) -> Unit,
+    onRetryUpNext: () -> Unit,
     onItemClick: (LibraryItem) -> Unit
 ) {
+    val context = LocalContext.current
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -91,36 +98,75 @@ fun HomeScreen(
         if (libraryUiState.continueWatching.isNotEmpty()) {
             item {
                 SectionHeader(
-                    title = "Continue watching",
+                    title = "Up next",
                     action = "${libraryUiState.continueWatching.size} shows"
                 )
             }
 
-            item {
-                LazyRow(
-                    horizontalArrangement =
-                        Arrangement.spacedBy(14.dp),
-                    contentPadding = PaddingValues(
-                        horizontal = 20.dp
-                    )
-                ) {
-                    items(
-                        items = libraryUiState.continueWatching,
-                        key = { item ->
-                            "continue-${item.tmdbId}"
-                        }
-                    ) { item ->
-                        ContinueWatchingCard(
-                            item = item,
-                            watchedEpisodeCount =
-                                libraryUiState
-                                    .watchedEpisodeCount(
-                                        item.tmdbId
-                                    ),
-                            onClick = {
-                                onItemClick(item)
-                            }
+            when {
+                upNextUiState.isLoading &&
+                    upNextUiState.entries.isEmpty() -> {
+                    item {
+                        LoadingBlock()
+                    }
+                }
+
+                upNextUiState.errorMessage != null &&
+                    upNextUiState.entries.isEmpty() -> {
+                    item {
+                        UpNextErrorCard(
+                            message = upNextUiState.errorMessage,
+                            onRetry = onRetryUpNext
                         )
+                    }
+                }
+
+                upNextUiState.entries.isEmpty() -> {
+                    item {
+                        UpNextCaughtUpCard()
+                    }
+                }
+
+                else -> {
+                    item {
+                        LazyRow(
+                            horizontalArrangement =
+                                Arrangement.spacedBy(14.dp),
+                            contentPadding = PaddingValues(
+                                horizontal = 20.dp
+                            )
+                        ) {
+                            items(
+                                items = upNextUiState.entries,
+                                key = { entry -> entry.key }
+                            ) { entry ->
+                                UpNextCard(
+                                    entry = entry,
+                                    isSaving = entry.item.tmdbId in
+                                        upNextUiState.savingShowIds,
+                                    onOpenShow = {
+                                        onItemClick(entry.item)
+                                    },
+                                    onWatchedToday = {
+                                        onMarkUpNextWatched(
+                                            entry,
+                                            LocalDate.now().toEpochDay()
+                                        )
+                                    },
+                                    onChooseDate = {
+                                        showHomeDatePicker(
+                                            context = context,
+                                            onDateSelected = { epochDay ->
+                                                onMarkUpNextWatched(
+                                                    entry,
+                                                    epochDay
+                                                )
+                                            }
+                                        )
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -368,27 +414,21 @@ private fun SectionHeader(
 }
 
 @Composable
-private fun ContinueWatchingCard(
-    item: LibraryItem,
-    watchedEpisodeCount: Int,
-    onClick: () -> Unit
+private fun UpNextCard(
+    entry: UpNextEntry,
+    isSaving: Boolean,
+    onOpenShow: () -> Unit,
+    onWatchedToday: () -> Unit,
+    onChooseDate: () -> Unit
 ) {
+    val item = entry.item
+    val episode = entry.episode
     val totalEpisodes = item.totalEpisodes
         ?.coerceAtLeast(0)
         ?: 0
 
-    val progress = if (totalEpisodes > 0) {
-        watchedEpisodeCount
-            .toFloat()
-            .div(totalEpisodes.toFloat())
-            .coerceIn(0f, 1f)
-    } else {
-        0f
-    }
-
     Card(
-        modifier = Modifier.width(270.dp),
-        onClick = onClick,
+        modifier = Modifier.width(310.dp),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
             containerColor = ScreenSurface
@@ -400,8 +440,8 @@ private fun ContinueWatchingCard(
             LibraryPoster(
                 item = item,
                 modifier = Modifier
-                    .width(82.dp)
-                    .height(124.dp)
+                    .width(88.dp)
+                    .height(146.dp)
             )
 
             Spacer(
@@ -411,91 +451,182 @@ private fun ContinueWatchingCard(
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .height(124.dp),
+                    .height(146.dp),
                 verticalArrangement =
                     Arrangement.SpaceBetween
             ) {
                 Column {
-                    Text(
-                        text = item.title,
-                        color = ScreenTextPrimary,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    TextButton(
+                        onClick = onOpenShow,
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Text(
+                            text = item.title,
+                            color = ScreenTextPrimary,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
 
                     Spacer(
-                        modifier = Modifier.height(6.dp)
+                        modifier = Modifier.height(2.dp)
                     )
 
                     Text(
-                        text = item.episodeProgressText
-                            ?: "Not started",
+                        text = episode.episodeCode,
                         color = ScreenPrimary,
                         fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Text(
+                        text = episode.name,
+                        color = ScreenTextSecondary,
+                        fontSize = 11.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
                 Column {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment =
-                            Alignment.CenterVertically
+                        horizontalArrangement = Arrangement.spacedBy(7.dp)
                     ) {
-                        Text(
-                            text = if (totalEpisodes > 0) {
-                                "$watchedEpisodeCount / $totalEpisodes"
-                            } else {
-                                "$watchedEpisodeCount watched"
-                            },
+                        Button(
+                            onClick = onWatchedToday,
                             modifier = Modifier.weight(1f),
-                            color = ScreenTextSecondary,
-                            fontSize = 11.sp
-                        )
-
-                        if (totalEpisodes > 0) {
+                            enabled = !isSaving,
+                            contentPadding = PaddingValues(
+                                horizontal = 8.dp,
+                                vertical = 0.dp
+                            ),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = ScreenPrimary
+                            ),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
                             Text(
-                                text = "${(progress * 100).toInt()}%",
-                                color = ScreenPrimary,
-                                fontSize = 11.sp,
+                                text = if (isSaving) "Saving…" else "Watched today",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Button(
+                            onClick = onChooseDate,
+                            enabled = !isSaving,
+                            contentPadding = PaddingValues(0.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = ScreenSurfaceLight
+                            ),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text(
+                                text = "Date",
+                                color = ScreenTextPrimary,
+                                fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
                     }
 
-                    Spacer(
-                        modifier = Modifier.height(6.dp)
-                    )
-
-                    LinearProgressIndicator(
-                        progress = { progress },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(6.dp),
-                        color = ScreenPrimary,
-                        trackColor = ScreenSurfaceLight
-                    )
-
-                    Spacer(
-                        modifier = Modifier.height(6.dp)
-                    )
-
-                    Text(
-                        text = item.watchDateEpochDay
-                            ?.let { epochDay ->
-                                "Last watched ${formatEpochDay(epochDay)}"
-                            }
-                            ?: "Open to continue",
-                        color = ScreenTextSecondary,
-                        fontSize = 10.sp,
-                        maxLines = 1
-                    )
+                    if (totalEpisodes > 0) {
+                        Spacer(modifier = Modifier.height(5.dp))
+                        Text(
+                            text = "$totalEpisodes episodes overall",
+                            color = ScreenTextSecondary,
+                            fontSize = 9.sp
+                        )
+                    }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun UpNextErrorCard(
+    message: String,
+    onRetry: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = ScreenSurface
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = message,
+                modifier = Modifier.weight(1f),
+                color = ScreenTextSecondary,
+                fontSize = 12.sp
+            )
+
+            TextButton(onClick = onRetry) {
+                Text(
+                    text = "Retry",
+                    color = ScreenPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun UpNextCaughtUpCard() {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = ScreenSuccess.copy(alpha = 0.10f)
+        )
+    ) {
+        Text(
+            text = "✓ You’re caught up with all currently aired episodes.",
+            modifier = Modifier.padding(17.dp),
+            color = ScreenSuccess,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+private fun showHomeDatePicker(
+    context: android.content.Context,
+    onDateSelected: (Long) -> Unit
+) {
+    val initialDate = LocalDate.now()
+
+    DatePickerDialog(
+        context,
+        { _, year, month, dayOfMonth ->
+            onDateSelected(
+                LocalDate.of(
+                    year,
+                    month + 1,
+                    dayOfMonth
+                ).toEpochDay()
+            )
+        },
+        initialDate.year,
+        initialDate.monthValue - 1,
+        initialDate.dayOfMonth
+    ).apply {
+        datePicker.maxDate = System.currentTimeMillis()
+    }.show()
 }
 
 @Composable
