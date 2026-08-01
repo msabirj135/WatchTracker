@@ -52,6 +52,7 @@ import com.sabir.watchtracker.data.local.LibraryStatus
 import com.sabir.watchtracker.data.local.RewatchRecord
 import com.sabir.watchtracker.data.remote.TmdbEpisode
 import com.sabir.watchtracker.data.remote.TmdbSeasonDetails
+import com.sabir.watchtracker.data.remote.TmdbTvDetails
 import com.sabir.watchtracker.ui.components.StarRatingSelector
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -222,6 +223,16 @@ private fun TvShowDetailScreen(
         }
 
         item {
+            SeriesIntelligenceCard(
+                details = uiState.tvDetails,
+                availableEpisodeCount = uiState.availableEpisodeCount,
+                totalEpisodeCount = uiState.totalEpisodeCount,
+                isCaughtUp = uiState.isCaughtUp,
+                nextUpcomingEpisode = uiState.nextUpcomingEpisode
+            )
+        }
+
+        item {
             RemoveFromLibraryButton(onClick = onDeleteClick)
         }
 
@@ -240,14 +251,15 @@ private fun TvShowDetailScreen(
                 progress = uiState.progress,
                 lastWatchedDate = item.watchDateEpochDay,
                 nextEpisode = uiState.nextEpisode,
+                nextUpcomingEpisode = uiState.nextUpcomingEpisode,
+                isCaughtUp = uiState.isCaughtUp,
                 isSaving = uiState.isSaving,
                 onMarkNextEpisode = onMarkNextEpisode
             )
         }
 
         if (
-            uiState.totalEpisodeCount > 0 &&
-            uiState.watchedCount < uiState.totalEpisodeCount
+            uiState.nextEpisode != null
         ) {
             item {
                 OutlinedButton(
@@ -257,7 +269,7 @@ private fun TvShowDetailScreen(
                     shape = RoundedCornerShape(13.dp)
                 ) {
                     Text(
-                        text = "Mark series completed",
+                        text = "Mark all aired episodes watched",
                         color = DetailSuccess,
                         fontWeight = FontWeight.Bold
                     )
@@ -360,7 +372,7 @@ private fun TvShowDetailScreen(
             title = { Text("Mark series completed?") },
             text = {
                 Text(
-                    "All remaining episodes will be marked as watched today. Existing episode dates will not be changed."
+                    "All remaining aired episodes will be marked as watched today. Future episodes will stay untouched."
                 )
             },
             confirmButton = {
@@ -370,7 +382,7 @@ private fun TvShowDetailScreen(
                         onMarkSeriesCompleted()
                     }
                 ) {
-                    Text("Complete series", color = DetailSuccess, fontWeight = FontWeight.Bold)
+                    Text("Mark aired episodes", color = DetailSuccess, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -853,12 +865,94 @@ private fun TitleOverviewCard(
 }
 
 @Composable
+private fun SeriesIntelligenceCard(
+    details: TmdbTvDetails?,
+    availableEpisodeCount: Int,
+    totalEpisodeCount: Int,
+    isCaughtUp: Boolean,
+    nextUpcomingEpisode: TmdbEpisode?
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = DetailSurface)
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Series information",
+                        color = DetailTextPrimary,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = details?.productionStatus
+                            ?.takeIf { it.isNotBlank() }
+                            ?: "Status unavailable",
+                        color = if (details?.inProduction == true) {
+                            DetailSuccess
+                        } else {
+                            DetailTextSecondary
+                        },
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                if (isCaughtUp) {
+                    Text(
+                        text = "✓ Caught up",
+                        color = DetailSuccess,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+                text = "$availableEpisodeCount of $totalEpisodeCount episodes currently aired",
+                color = DetailTextSecondary,
+                fontSize = 12.sp
+            )
+
+            nextUpcomingEpisode?.let { episode ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = buildString {
+                        append("Next: ")
+                        append(episode.episodeCode)
+                        append(" • ")
+                        append(episode.name)
+                    },
+                    color = DetailPrimary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = episode.parsedAirDate?.format(
+                        DateTimeFormatter.ofPattern("dd MMM yyyy")
+                    )?.let { "Airs $it" } ?: "Air date TBA",
+                    color = DetailTextSecondary,
+                    fontSize = 11.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun ProgressCard(
     watchedCount: Int,
     totalCount: Int,
     progress: Float,
     lastWatchedDate: Long?,
     nextEpisode: TmdbEpisode?,
+    nextUpcomingEpisode: TmdbEpisode?,
+    isCaughtUp: Boolean,
     isSaving: Boolean,
     onMarkNextEpisode: () -> Unit
 ) {
@@ -949,13 +1043,17 @@ private fun ProgressCard(
                         fontWeight = FontWeight.Bold
                     )
                 }
-            } else if (totalCount > 0) {
+            } else if (isCaughtUp) {
                 Spacer(
                     modifier = Modifier.height(12.dp)
                 )
 
                 Text(
-                    text = "✓ All episodes completed",
+                    text = if (nextUpcomingEpisode != null) {
+                        "✓ Caught up • waiting for ${nextUpcomingEpisode.episodeCode}"
+                    } else {
+                        "✓ Caught up with all aired episodes"
+                    },
                     color = DetailSuccess,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold
@@ -981,7 +1079,11 @@ private fun SeasonCard(
         )
     }
 
-    val remainingCount = season.episodes.size - watchedCount
+    val remainingCount = season.episodes.count { episode ->
+        episode.hasAired && !watchedByKey.containsKey(
+            episode.seasonNumber to episode.episodeNumber
+        )
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -1053,6 +1155,7 @@ private fun SeasonCard(
                         EpisodeRow(
                             episode = episode,
                             watch = watch,
+                            enabled = episode.hasAired || watch != null,
                             onClick = {
                                 onEpisodeClick(episode)
                             }
@@ -1067,6 +1170,7 @@ private fun SeasonCard(
 private fun EpisodeRow(
     episode: TmdbEpisode,
     watch: EpisodeWatch?,
+    enabled: Boolean,
     onClick: () -> Unit
 ) {
     Card(
@@ -1078,6 +1182,7 @@ private fun EpisodeRow(
                 bottom = 10.dp
             ),
         onClick = onClick,
+        enabled = enabled,
         shape = RoundedCornerShape(13.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (watch != null) {
@@ -1137,8 +1242,12 @@ private fun EpisodeRow(
                 Text(
                     text = watch?.let {
                         "Watched ${formatDetailDate(it.watchedDateEpochDay)}"
-                    } ?: episode.airDate?.let { airDate ->
-                        "Aired $airDate"
+                    } ?: episode.parsedAirDate?.let { airDate ->
+                        if (episode.hasAired) {
+                            "Aired ${airDate.format(detailDateFormatter)}"
+                        } else {
+                            "Airs ${airDate.format(detailDateFormatter)}"
+                        }
                     } ?: "Not watched",
                     color = if (watch != null) {
                         DetailSuccess
@@ -1150,8 +1259,12 @@ private fun EpisodeRow(
             }
 
             Text(
-                text = if (watch != null) "Edit" else "Add",
-                color = DetailPrimary,
+                text = when {
+                    watch != null -> "Edit"
+                    episode.hasAired -> "Add"
+                    else -> "Upcoming"
+                },
+                color = if (enabled) DetailPrimary else DetailTextSecondary,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold
             )
