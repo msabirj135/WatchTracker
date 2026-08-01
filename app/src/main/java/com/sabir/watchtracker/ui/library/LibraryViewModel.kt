@@ -1,8 +1,12 @@
 package com.sabir.watchtracker.ui.library
 
 import android.app.Application
+import android.net.Uri
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.AndroidViewModel
+import com.sabir.watchtracker.data.backup.BackupImportMode
+import com.sabir.watchtracker.data.backup.BackupPreview
+import com.sabir.watchtracker.data.backup.ReelTickBackupManager
 import com.sabir.watchtracker.data.local.EpisodeWatch
 import com.sabir.watchtracker.data.local.CustomList
 import com.sabir.watchtracker.data.local.CustomListItem
@@ -19,6 +23,14 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+data class BackupUiState(
+    val isWorking: Boolean = false,
+    val pendingPreview: BackupPreview? = null,
+    val successMessage: String? = null,
+    val errorMessage: String? = null
+)
 
 data class WatchHistoryEntry(
     val key: String,
@@ -356,6 +368,12 @@ class LibraryViewModel(
 
     private val tmdbRepository = TmdbRepository()
 
+    private val backupManager = ReelTickBackupManager(
+        context = application.applicationContext
+    )
+
+    private var pendingBackupJson: String? = null
+
     private val attemptedRuntimeIds = mutableSetOf<Int>()
 
     private val coroutineScope = CoroutineScope(
@@ -364,6 +382,11 @@ class LibraryViewModel(
 
     var uiState = mutableStateOf(
         LibraryUiState()
+    )
+        private set
+
+    var backupUiState = mutableStateOf(
+        BackupUiState()
     )
         private set
 
@@ -426,6 +449,132 @@ class LibraryViewModel(
 
     fun deleteCustomList(listId: Long) {
         coroutineScope.launch { repository.deleteCustomList(listId) }
+    }
+
+    fun exportBackup(uri: Uri) {
+        if (backupUiState.value.isWorking) return
+
+        backupUiState.value = BackupUiState(
+            isWorking = true
+        )
+
+        coroutineScope.launch {
+            try {
+                val json = withContext(Dispatchers.IO) {
+                    backupManager.createBackupJson()
+                }
+
+                withContext(Dispatchers.IO) {
+                    val outputStream = getApplication<Application>()
+                        .contentResolver
+                        .openOutputStream(uri, "wt")
+                        ?: error("Unable to open the selected file.")
+
+                    outputStream.bufferedWriter().use { writer ->
+                        writer.write(json)
+                    }
+                }
+
+                backupUiState.value = BackupUiState(
+                    successMessage = "Backup exported successfully."
+                )
+            } catch (exception: Exception) {
+                backupUiState.value = BackupUiState(
+                    errorMessage = exception.message
+                        ?: "Unable to export the backup."
+                )
+            }
+        }
+    }
+
+    fun inspectBackup(uri: Uri) {
+        if (backupUiState.value.isWorking) return
+
+        backupUiState.value = BackupUiState(
+            isWorking = true
+        )
+
+        coroutineScope.launch {
+            try {
+                val json = withContext(Dispatchers.IO) {
+                    val inputStream = getApplication<Application>()
+                        .contentResolver
+                        .openInputStream(uri)
+                        ?: error("Unable to open the selected file.")
+
+                    inputStream.bufferedReader().use { reader ->
+                        reader.readText()
+                    }
+                }
+
+                val preview = withContext(Dispatchers.IO) {
+                    backupManager.inspectBackupJson(json)
+                }
+
+                pendingBackupJson = json
+                backupUiState.value = BackupUiState(
+                    pendingPreview = preview
+                )
+            } catch (exception: Exception) {
+                pendingBackupJson = null
+                backupUiState.value = BackupUiState(
+                    errorMessage = exception.message
+                        ?: "Unable to read the backup."
+                )
+            }
+        }
+    }
+
+    fun restoreBackup(mode: BackupImportMode) {
+        val json = pendingBackupJson ?: return
+        if (backupUiState.value.isWorking) return
+
+        backupUiState.value = backupUiState.value.copy(
+            isWorking = true,
+            errorMessage = null,
+            successMessage = null
+        )
+
+        coroutineScope.launch {
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    backupManager.restoreBackupJson(
+                        json = json,
+                        mode = mode
+                    )
+                }
+
+                pendingBackupJson = null
+                backupUiState.value = BackupUiState(
+                    successMessage = buildString {
+                        append("Backup restored: ")
+                        append(result.titleCount)
+                        append(" titles, ")
+                        append(result.episodeCount)
+                        append(" episodes and ")
+                        append(result.customListCount)
+                        append(" lists.")
+                    }
+                )
+            } catch (exception: Exception) {
+                backupUiState.value = backupUiState.value.copy(
+                    isWorking = false,
+                    errorMessage = exception.message
+                        ?: "Unable to restore the backup."
+                )
+            }
+        }
+    }
+
+    fun dismissBackupPreview() {
+        if (backupUiState.value.isWorking) return
+        pendingBackupJson = null
+        backupUiState.value = BackupUiState()
+    }
+
+    fun clearBackupMessage() {
+        if (backupUiState.value.isWorking) return
+        backupUiState.value = BackupUiState()
     }
 
     private fun backfillMovieRuntimes(items: List<LibraryItem>) {
