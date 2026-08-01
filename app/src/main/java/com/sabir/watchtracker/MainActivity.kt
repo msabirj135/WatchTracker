@@ -268,6 +268,7 @@ private fun WatchTrackerApp(
                             paddingValues = innerPadding,
                             title = "Movies",
                             items = libraryUiState.movies,
+                            episodeWatches = libraryUiState.episodeWatches,
                             isLoading = libraryUiState.isLoading,
                             onBackClick = { selectedTab = 0 },
                             onAddClick = {
@@ -284,6 +285,7 @@ private fun WatchTrackerApp(
                             paddingValues = innerPadding,
                             title = "TV Shows",
                             items = libraryUiState.tvShows,
+                            episodeWatches = libraryUiState.episodeWatches,
                             isLoading = libraryUiState.isLoading,
                             onBackClick = { selectedTab = 0 },
                             onAddClick = {
