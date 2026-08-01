@@ -122,7 +122,7 @@ fun ListsScreen(
         theatreListIsOpen -> TheatreWatchesDetail(
             paddingValues = paddingValues,
             entries = state.theatreWatchEntries,
-            totalVisits = state.theatreVisitCount,
+            moviesThisYear = state.theatreMoviesThisYear,
             totalMinutes = state.theatreWatchMinutes,
             onBack = { theatreListIsOpen = false },
             onItemClick = onItemClick
@@ -269,7 +269,7 @@ private fun ListsOverview(
         item {
             TheatreSmartListCard(
                 movieCount = state.theatreWatchEntries.size,
-                visitCount = state.theatreVisitCount,
+                moviesThisYear = state.theatreMoviesThisYear,
                 totalMinutes = state.theatreWatchMinutes,
                 onClick = onTheatreClick
             )
@@ -333,7 +333,7 @@ private fun ListsOverview(
 @Composable
 private fun TheatreSmartListCard(
     movieCount: Int,
-    visitCount: Int,
+    moviesThisYear: Int,
     totalMinutes: Int,
     onClick: () -> Unit
 ) {
@@ -358,7 +358,7 @@ private fun TheatreSmartListCard(
             Column(Modifier.weight(1f)) {
                 Text("Theatre watches", color = ListsText, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 Text(
-                    "$visitCount visits • $movieCount movies • ${formatMinutes(totalMinutes)}",
+                    "$movieCount movies • $moviesThisYear this year • ${formatMinutes(totalMinutes)}",
                     color = ListsMuted,
                     fontSize = 11.sp,
                     maxLines = 1,
@@ -374,7 +374,7 @@ private fun TheatreSmartListCard(
 private fun TheatreWatchesDetail(
     paddingValues: PaddingValues,
     entries: List<TheatreWatchEntry>,
-    totalVisits: Int,
+    moviesThisYear: Int,
     totalMinutes: Int,
     onBack: () -> Unit,
     onItemClick: (LibraryItem) -> Unit
@@ -392,7 +392,7 @@ private fun TheatreWatchesDetail(
         item(span = { GridItemSpan(maxLineSpan) }) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 MiniSummary(Modifier.weight(1f), entries.size.toString(), "Movies")
-                MiniSummary(Modifier.weight(1f), totalVisits.toString(), "Visits")
+                MiniSummary(Modifier.weight(1f), moviesThisYear.toString(), "This year")
                 MiniSummary(Modifier.weight(1f), formatMinutes(totalMinutes), "Watch time")
             }
         }
@@ -438,7 +438,11 @@ private fun TheatrePosterCard(
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "${entry.visitCount} theatre ${if (entry.visitCount == 1) "visit" else "visits"}",
+                    if (entry.visitCount == 1) {
+                        "Theatre"
+                    } else {
+                        "Watched ${entry.visitCount} times"
+                    },
                     color = ListsPrimary,
                     fontSize = 8.sp,
                     fontWeight = FontWeight.Bold,
