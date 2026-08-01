@@ -100,6 +100,7 @@ fun ListsScreen(
     onItemClick: (LibraryItem) -> Unit
 ) {
     var selectedMonth by remember { mutableStateOf<MonthlyWatchList?>(null) }
+    var theatreListIsOpen by remember { mutableStateOf(false) }
     var selectedMonthlyEntry by remember { mutableStateOf<MonthlyGridEntry?>(null) }
     var selectedList by remember { mutableStateOf<CustomList?>(null) }
     var showCreateDialog by remember { mutableStateOf(false) }
@@ -107,16 +108,26 @@ fun ListsScreen(
     var editingList by remember { mutableStateOf<CustomList?>(null) }
 
     BackHandler(
-        enabled = selectedMonthlyEntry != null || selectedMonth != null || selectedList != null
+        enabled = selectedMonthlyEntry != null || selectedMonth != null || selectedList != null || theatreListIsOpen
     ) {
         when {
             selectedMonthlyEntry != null -> selectedMonthlyEntry = null
             selectedMonth != null -> selectedMonth = null
             selectedList != null -> selectedList = null
+            theatreListIsOpen -> theatreListIsOpen = false
         }
     }
 
     when {
+        theatreListIsOpen -> TheatreWatchesDetail(
+            paddingValues = paddingValues,
+            entries = state.theatreWatchEntries,
+            totalVisits = state.theatreVisitCount,
+            totalMinutes = state.theatreWatchMinutes,
+            onBack = { theatreListIsOpen = false },
+            onItemClick = onItemClick
+        )
+
         selectedMonthlyEntry != null -> MonthlyTvDetail(
             paddingValues = paddingValues,
             entry = selectedMonthlyEntry!!,
@@ -161,6 +172,7 @@ fun ListsScreen(
             state = state,
             onBackClick = onBackClick,
             onNewList = { showCreateDialog = true },
+            onTheatreClick = { theatreListIsOpen = true },
             onMonthClick = { selectedMonth = it },
             onListClick = { selectedList = it }
         )
@@ -219,6 +231,7 @@ private fun ListsOverview(
     state: LibraryUiState,
     onBackClick: () -> Unit,
     onNewList: () -> Unit,
+    onTheatreClick: () -> Unit,
     onMonthClick: (MonthlyWatchList) -> Unit,
     onListClick: (CustomList) -> Unit
 ) {
@@ -251,7 +264,16 @@ private fun ListsOverview(
             }
         }
 
-        item { SectionTitle("Smart lists", "Grouped automatically by watch date") }
+        item { SectionTitle("Smart lists", "Automatic collections and monthly history") }
+
+        item {
+            TheatreSmartListCard(
+                movieCount = state.theatreWatchEntries.size,
+                visitCount = state.theatreVisitCount,
+                totalMinutes = state.theatreWatchMinutes,
+                onClick = onTheatreClick
+            )
+        }
 
         if (state.monthlyLists.isEmpty()) {
             item { EmptyListCard("Watch a movie or episode to create your first monthly list.") }
@@ -303,6 +325,138 @@ private fun ListsOverview(
                         Text(count.toString(), color = ListsText, fontWeight = FontWeight.Bold)
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TheatreSmartListCard(
+    movieCount: Int,
+    visitCount: Int,
+    totalMinutes: Int,
+    onClick: () -> Unit
+) {
+    Card(
+        onClick = onClick,
+        colors = CardDefaults.cardColors(containerColor = ListsSurface),
+        shape = RoundedCornerShape(18.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(18.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier.size(52.dp).background(
+                    ListsPrimary.copy(alpha = .14f), RoundedCornerShape(15.dp)
+                ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("🎟", color = ListsPrimary, fontSize = 23.sp)
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Theatre watches", color = ListsText, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    "$visitCount visits • $movieCount movies • ${formatMinutes(totalMinutes)}",
+                    color = ListsMuted,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Text("›", color = ListsMuted, fontSize = 24.sp)
+        }
+    }
+}
+
+@Composable
+private fun TheatreWatchesDetail(
+    paddingValues: PaddingValues,
+    entries: List<TheatreWatchEntry>,
+    totalVisits: Int,
+    totalMinutes: Int,
+    onBack: () -> Unit,
+    onItemClick: (LibraryItem) -> Unit
+) {
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(3),
+        modifier = Modifier.fillMaxSize().background(ListsBackground).padding(paddingValues),
+        contentPadding = PaddingValues(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(9.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            DetailHeader("Theatre watches", onBack)
+        }
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                MiniSummary(Modifier.weight(1f), entries.size.toString(), "Movies")
+                MiniSummary(Modifier.weight(1f), totalVisits.toString(), "Visits")
+                MiniSummary(Modifier.weight(1f), formatMinutes(totalMinutes), "Watch time")
+            }
+        }
+        if (entries.isEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                EmptyListCard("Movies marked as watched in a theatre will appear here automatically.")
+            }
+        } else {
+            items(entries, key = { entry -> "theatre-${entry.item.tmdbId}" }) { entry ->
+                TheatrePosterCard(entry = entry, onClick = { onItemClick(entry.item) })
+            }
+        }
+    }
+}
+
+@Composable
+private fun TheatrePosterCard(
+    entry: TheatreWatchEntry,
+    onClick: () -> Unit
+) {
+    Card(
+        onClick = onClick,
+        colors = CardDefaults.cardColors(containerColor = ListsSurface),
+        shape = RoundedCornerShape(13.dp)
+    ) {
+        Column {
+            AsyncImage(
+                model = entry.item.posterUrl,
+                contentDescription = entry.item.title,
+                modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f),
+                contentScale = ContentScale.Crop
+            )
+            Column(modifier = Modifier.fillMaxWidth().height(100.dp).padding(8.dp)) {
+                Text(
+                    entry.item.title,
+                    modifier = Modifier.height(28.dp),
+                    color = ListsText,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = 12.sp
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "${entry.visitCount} theatre ${if (entry.visitCount == 1) "visit" else "visits"}",
+                    color = ListsPrimary,
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Last • ${formatShortEpochDay(entry.latestVisitEpochDay)}",
+                    color = ListsMuted,
+                    fontSize = 8.sp,
+                    maxLines = 1
+                )
+                Text(
+                    formatMinutes(entry.totalMinutes),
+                    color = ListsMuted,
+                    fontSize = 8.sp,
+                    maxLines = 1
+                )
             }
         }
     }
