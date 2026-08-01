@@ -1,6 +1,7 @@
 ﻿package com.sabir.watchtracker.data.remote
 
 import com.google.gson.annotations.SerializedName
+import com.sabir.watchtracker.BuildConfig
 
 data class TmdbTvDetails(
     @SerializedName("id")
@@ -128,6 +129,6 @@ data class TmdbEpisode(
 
     val stillUrl: String?
         get() = stillPath?.let { path ->
-            "https://image.tmdb.org/t/p/w500$path"
+            "${BuildConfig.TMDB_PROXY_BASE_URL.trimEnd('/')}/image/t/p/w500$path"
         }
 }
