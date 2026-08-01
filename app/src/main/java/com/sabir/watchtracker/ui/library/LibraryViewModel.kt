@@ -37,9 +37,24 @@ data class UpNextEntry(
         get() = "${item.tmdbId}-${episode.seasonNumber}-${episode.episodeNumber}"
 }
 
+data class UpcomingEpisodeEntry(
+    val item: LibraryItem,
+    val episode: TmdbEpisode,
+    val productionStatus: String
+) {
+    val key: String
+        get() = "upcoming-${item.tmdbId}-${episode.seasonNumber}-${episode.episodeNumber}"
+}
+
+private data class TvQueueResult(
+    val nextAvailable: UpNextEntry?,
+    val upcoming: UpcomingEpisodeEntry?
+)
+
 data class UpNextUiState(
     val isLoading: Boolean = false,
     val entries: List<UpNextEntry> = emptyList(),
+    val upcomingEntries: List<UpcomingEpisodeEntry> = emptyList(),
     val savingShowIds: Set<Int> = emptySet(),
     val errorMessage: String? = null
 )
@@ -146,6 +161,12 @@ data class LibraryUiState(
                     item.updatedAt
                 }
             )
+
+    val tvQueueCandidates: List<LibraryItem>
+        get() = tvShows.filter { item ->
+            item.status == LibraryStatus.WATCHING ||
+                item.status == LibraryStatus.COMPLETED
+        }.sortedWith(latestWatchedFirst())
 
     val completed: List<LibraryItem>
         get() = items.filter { item ->
@@ -515,7 +536,7 @@ class LibraryViewModel(
     }
 
     private fun refreshUpNextIfNeeded(state: LibraryUiState) {
-        val signature = state.continueWatching.joinToString("|") { item ->
+        val signature = state.tvQueueCandidates.joinToString("|") { item ->
             buildString {
                 append(item.tmdbId)
                 append(":")
@@ -535,7 +556,7 @@ class LibraryViewModel(
     private fun loadUpNext(state: LibraryUiState = uiState.value) {
         upNextJob?.cancel()
 
-        val shows = state.continueWatching
+        val shows = state.tvQueueCandidates
         if (shows.isEmpty()) {
             upNextUiState.value = UpNextUiState()
             return
@@ -550,7 +571,7 @@ class LibraryViewModel(
             val attempts = withContext(Dispatchers.IO) {
                 shows.map { show ->
                     runCatching {
-                        findNextEpisode(
+                        findShowQueue(
                             show = show,
                             watchedEpisodes = state.episodeWatches
                                 .filter { watch ->
@@ -561,9 +582,11 @@ class LibraryViewModel(
                 }
             }
 
-            val entries = attempts.mapNotNull { attempt ->
-                attempt.getOrNull()
-            }
+            val results = attempts.mapNotNull { attempt -> attempt.getOrNull() }
+            val entries = results.mapNotNull { result -> result.nextAvailable }
+            val upcomingEntries = results
+                .mapNotNull { result -> result.upcoming }
+                .sortedBy { entry -> entry.episode.parsedAirDate }
 
             val failedCount = attempts.count { attempt ->
                 attempt.isFailure
@@ -572,8 +595,11 @@ class LibraryViewModel(
             upNextUiState.value = upNextUiState.value.copy(
                 isLoading = false,
                 entries = entries,
+                upcomingEntries = upcomingEntries,
                 errorMessage = if (
-                    entries.isEmpty() && failedCount == shows.size
+                    entries.isEmpty() &&
+                    upcomingEntries.isEmpty() &&
+                    failedCount == shows.size
                 ) {
                     "Unable to load upcoming episodes."
                 } else {
@@ -583,15 +609,17 @@ class LibraryViewModel(
         }
     }
 
-    private suspend fun findNextEpisode(
+    private suspend fun findShowQueue(
         show: LibraryItem,
         watchedEpisodes: List<EpisodeWatch>
-    ): UpNextEntry? {
+    ): TvQueueResult {
         val watchedKeys = watchedEpisodes.map { watch ->
             watch.seasonNumber to watch.episodeNumber
         }.toSet()
 
         val details = tmdbRepository.getTvDetails(show.tmdbId)
+
+        val allEpisodes = mutableListOf<TmdbEpisode>()
 
         details.regularSeasons.forEach { seasonSummary ->
             val season = tmdbRepository.getTvSeasonDetails(
@@ -599,32 +627,37 @@ class LibraryViewModel(
                 seasonNumber = seasonSummary.seasonNumber
             )
 
-            val nextEpisode = season.episodes
+            allEpisodes += season.episodes
                 .sortedBy { episode -> episode.episodeNumber }
-                .firstOrNull { episode ->
-                    (episode.seasonNumber to episode.episodeNumber) !in
-                        watchedKeys && episode.isAvailableToWatch()
-                }
-
-            if (nextEpisode != null) {
-                return UpNextEntry(
-                    item = show,
-                    episode = nextEpisode
-                )
-            }
         }
 
-        return null
-    }
+        val unwatched = allEpisodes.filter { episode ->
+            (episode.seasonNumber to episode.episodeNumber) !in watchedKeys
+        }
 
-    private fun TmdbEpisode.isAvailableToWatch(): Boolean {
-        val date = airDate
-            ?.takeIf { value -> value.isNotBlank() }
-            ?: return true
+        val nextAvailable = unwatched.firstOrNull { episode ->
+            episode.hasAired
+        }?.let { episode ->
+            UpNextEntry(item = show, episode = episode)
+        }
 
-        return runCatching {
-            !LocalDate.parse(date).isAfter(LocalDate.now())
-        }.getOrDefault(true)
+        val upcoming = unwatched
+            .filter { episode -> !episode.hasAired }
+            .minByOrNull { episode ->
+                episode.parsedAirDate ?: LocalDate.MAX
+            }
+            ?.let { episode ->
+                UpcomingEpisodeEntry(
+                    item = show,
+                    episode = episode,
+                    productionStatus = details.productionStatus
+                )
+            }
+
+        return TvQueueResult(
+            nextAvailable = nextAvailable,
+            upcoming = upcoming
+        )
     }
 
     fun markUpNextWatched(
