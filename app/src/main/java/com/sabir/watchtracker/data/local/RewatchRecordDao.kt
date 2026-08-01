@@ -42,4 +42,7 @@ interface RewatchRecordDao {
 
     @Query("DELETE FROM rewatch_records")
     suspend fun deleteAll()
+
+    @Query("DELETE FROM rewatch_records WHERE NOT EXISTS (SELECT 1 FROM library_items WHERE library_items.tmdbId = rewatch_records.tmdbId AND library_items.mediaType = rewatch_records.mediaType)")
+    suspend fun deleteOrphanRecords(): Int
 }
