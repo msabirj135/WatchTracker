@@ -17,6 +17,7 @@ import com.sabir.watchtracker.data.repository.LibraryRepository
 import com.sabir.watchtracker.data.repository.TmdbRepository
 import java.time.LocalDate
 import java.time.YearMonth
+import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
@@ -46,7 +47,9 @@ data class BackupUiState(
     val isWorking: Boolean = false,
     val pendingPreview: BackupPreview? = null,
     val successMessage: String? = null,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val lastBackupEpochMillis: Long? = null,
+    val safetyBackupEpochMillis: Long? = null
 )
 
 data class WatchHistoryEntry(
@@ -389,6 +392,16 @@ class LibraryViewModel(
         context = application.applicationContext
     )
 
+    private val backupPreferences = application.getSharedPreferences(
+        "reeltick_backup",
+        android.content.Context.MODE_PRIVATE
+    )
+
+    private val safetyBackupFile = File(
+        application.filesDir,
+        "reeltick-safety-backup.json"
+    )
+
     private var pendingBackupJson: String? = null
 
     private var upNextJob: Job? = null
@@ -406,7 +419,15 @@ class LibraryViewModel(
         private set
 
     var backupUiState = mutableStateOf(
-        BackupUiState()
+        BackupUiState(
+            lastBackupEpochMillis = backupPreferences
+                .getLong("last_backup", 0L)
+                .takeIf { value -> value > 0L },
+            safetyBackupEpochMillis = safetyBackupFile
+                .takeIf { file -> file.exists() }
+                ?.lastModified()
+                ?.takeIf { value -> value > 0L }
+        )
     )
         private set
 
@@ -633,8 +654,10 @@ class LibraryViewModel(
     fun exportBackup(uri: Uri) {
         if (backupUiState.value.isWorking) return
 
-        backupUiState.value = BackupUiState(
-            isWorking = true
+        backupUiState.value = backupUiState.value.copy(
+            isWorking = true,
+            successMessage = null,
+            errorMessage = null
         )
 
         coroutineScope.launch {
@@ -654,11 +677,19 @@ class LibraryViewModel(
                     }
                 }
 
-                backupUiState.value = BackupUiState(
-                    successMessage = "Backup exported successfully."
+                val now = System.currentTimeMillis()
+                backupPreferences.edit()
+                    .putLong("last_backup", now)
+                    .apply()
+
+                backupUiState.value = backupUiState.value.copy(
+                    isWorking = false,
+                    successMessage = "Backup exported successfully.",
+                    lastBackupEpochMillis = now
                 )
             } catch (exception: Exception) {
-                backupUiState.value = BackupUiState(
+                backupUiState.value = backupUiState.value.copy(
+                    isWorking = false,
                     errorMessage = exception.message
                         ?: "Unable to export the backup."
                 )
@@ -669,8 +700,10 @@ class LibraryViewModel(
     fun inspectBackup(uri: Uri) {
         if (backupUiState.value.isWorking) return
 
-        backupUiState.value = BackupUiState(
-            isWorking = true
+        backupUiState.value = backupUiState.value.copy(
+            isWorking = true,
+            successMessage = null,
+            errorMessage = null
         )
 
         coroutineScope.launch {
@@ -691,12 +724,14 @@ class LibraryViewModel(
                 }
 
                 pendingBackupJson = json
-                backupUiState.value = BackupUiState(
+                backupUiState.value = backupUiState.value.copy(
+                    isWorking = false,
                     pendingPreview = preview
                 )
             } catch (exception: Exception) {
                 pendingBackupJson = null
-                backupUiState.value = BackupUiState(
+                backupUiState.value = backupUiState.value.copy(
+                    isWorking = false,
                     errorMessage = exception.message
                         ?: "Unable to read the backup."
                 )
@@ -717,6 +752,10 @@ class LibraryViewModel(
         coroutineScope.launch {
             try {
                 val result = withContext(Dispatchers.IO) {
+                    if (mode == BackupImportMode.REPLACE) {
+                        createInternalSafetyBackup()
+                    }
+
                     backupManager.restoreBackupJson(
                         json = json,
                         mode = mode
@@ -724,7 +763,14 @@ class LibraryViewModel(
                 }
 
                 pendingBackupJson = null
-                backupUiState.value = BackupUiState(
+                val safetyTimestamp = safetyBackupFile
+                    .takeIf { file -> file.exists() }
+                    ?.lastModified()
+
+                backupUiState.value = backupUiState.value.copy(
+                    isWorking = false,
+                    pendingPreview = null,
+                    safetyBackupEpochMillis = safetyTimestamp,
                     successMessage = buildString {
                         append("Backup restored: ")
                         append(result.titleCount)
@@ -748,12 +794,131 @@ class LibraryViewModel(
     fun dismissBackupPreview() {
         if (backupUiState.value.isWorking) return
         pendingBackupJson = null
-        backupUiState.value = BackupUiState()
+        backupUiState.value = backupUiState.value.copy(
+            pendingPreview = null,
+            successMessage = null,
+            errorMessage = null
+        )
     }
 
     fun clearBackupMessage() {
         if (backupUiState.value.isWorking) return
-        backupUiState.value = BackupUiState()
+        backupUiState.value = backupUiState.value.copy(
+            successMessage = null,
+            errorMessage = null
+        )
+    }
+
+    fun exportHistoryCsv(uri: Uri) {
+        if (backupUiState.value.isWorking) return
+
+        backupUiState.value = backupUiState.value.copy(
+            isWorking = true,
+            successMessage = null,
+            errorMessage = null
+        )
+
+        coroutineScope.launch {
+            try {
+                val csv = withContext(Dispatchers.IO) {
+                    backupManager.createHistoryCsv()
+                }
+
+                withContext(Dispatchers.IO) {
+                    val outputStream = getApplication<Application>()
+                        .contentResolver
+                        .openOutputStream(uri, "wt")
+                        ?: error("Unable to open the selected file.")
+
+                    outputStream.bufferedWriter().use { writer ->
+                        writer.write(csv)
+                    }
+                }
+
+                backupUiState.value = backupUiState.value.copy(
+                    isWorking = false,
+                    successMessage = "Watch history exported as CSV."
+                )
+            } catch (exception: Exception) {
+                backupUiState.value = backupUiState.value.copy(
+                    isWorking = false,
+                    errorMessage = exception.message
+                        ?: "Unable to export watch history."
+                )
+            }
+        }
+    }
+
+    fun restoreSafetyBackup() {
+        if (
+            backupUiState.value.isWorking ||
+            !safetyBackupFile.exists()
+        ) return
+
+        backupUiState.value = backupUiState.value.copy(
+            isWorking = true,
+            successMessage = null,
+            errorMessage = null
+        )
+
+        coroutineScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    backupManager.restoreBackupJson(
+                        json = safetyBackupFile.readText(),
+                        mode = BackupImportMode.REPLACE
+                    )
+                }
+
+                backupUiState.value = backupUiState.value.copy(
+                    isWorking = false,
+                    successMessage = "Safety backup restored successfully."
+                )
+            } catch (exception: Exception) {
+                backupUiState.value = backupUiState.value.copy(
+                    isWorking = false,
+                    errorMessage = exception.message
+                        ?: "Unable to restore the safety backup."
+                )
+            }
+        }
+    }
+
+    fun clearAllData() {
+        if (backupUiState.value.isWorking) return
+
+        backupUiState.value = backupUiState.value.copy(
+            isWorking = true,
+            successMessage = null,
+            errorMessage = null
+        )
+
+        coroutineScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    createInternalSafetyBackup()
+                    backupManager.clearAllData()
+                }
+
+                backupUiState.value = backupUiState.value.copy(
+                    isWorking = false,
+                    safetyBackupEpochMillis = safetyBackupFile.lastModified(),
+                    successMessage = "All library data cleared. A safety backup was kept."
+                )
+            } catch (exception: Exception) {
+                backupUiState.value = backupUiState.value.copy(
+                    isWorking = false,
+                    errorMessage = exception.message
+                        ?: "Unable to clear the library."
+                )
+            }
+        }
+    }
+
+    private suspend fun createInternalSafetyBackup() {
+        safetyBackupFile.writeText(
+            backupManager.createBackupJson()
+        )
     }
 
     private fun backfillMovieRuntimes(items: List<LibraryItem>) {
