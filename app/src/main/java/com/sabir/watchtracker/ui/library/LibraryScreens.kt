@@ -1649,6 +1649,9 @@ private fun calculateAdvancedYearSummary(
         .maxByOrNull { it.value }
         ?.let { (title, count) -> "$title • $count" }
     val topGenres = yearEntries
+        .distinctBy { entry ->
+            entry.item.mediaType to entry.item.tmdbId
+        }
         .flatMap { entry -> entry.item.genres.distinct() }
         .groupingBy { genre -> genre }
         .eachCount()
@@ -1859,7 +1862,7 @@ private fun TopGenresCard(genres: List<Pair<String, Int>>) {
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "Ranked by watch entries in the selected year",
+                text = "Ranked by unique watched titles in the selected year",
                 color = ScreenTextSecondary,
                 fontSize = 10.sp
             )
