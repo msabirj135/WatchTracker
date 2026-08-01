@@ -12,6 +12,7 @@ import com.sabir.watchtracker.data.local.CustomList
 import com.sabir.watchtracker.data.local.CustomListItem
 import com.sabir.watchtracker.data.local.LibraryItem
 import com.sabir.watchtracker.data.local.LibraryStatus
+import com.sabir.watchtracker.data.local.RewatchRecord
 import com.sabir.watchtracker.data.remote.TmdbEpisode
 import com.sabir.watchtracker.data.repository.LibraryRepository
 import com.sabir.watchtracker.data.repository.TmdbRepository
@@ -56,7 +57,9 @@ data class WatchHistoryEntry(
     val key: String,
     val item: LibraryItem,
     val detailText: String,
-    val watchedDateEpochDay: Long
+    val watchedDateEpochDay: Long,
+    val runtimeMinutes: Int?,
+    val isRewatch: Boolean = false
 )
 
 data class MonthlyWatchList(
@@ -81,13 +84,14 @@ data class MonthlyGridEntry(
     val episodes: List<EpisodeWatch>,
     val overallWatchedEpisodes: Int,
     val watchedDateEpochDay: Long,
-    val totalMinutes: Int
+    val totalMinutes: Int,
+    val watchCount: Int
 ) {
     val key: String
         get() = "${item.mediaType}-${item.tmdbId}"
 
     val watchedCount: Int
-        get() = if (item.mediaType == "tv") episodes.size else 1
+        get() = watchCount
 }
 
 data class MonthlyWatchTime(
@@ -99,6 +103,7 @@ data class LibraryUiState(
     val isLoading: Boolean = true,
     val items: List<LibraryItem> = emptyList(),
     val episodeWatches: List<EpisodeWatch> = emptyList(),
+    val rewatchRecords: List<RewatchRecord> = emptyList(),
     val customLists: List<CustomList> = emptyList(),
     val customListItems: List<CustomListItem> = emptyList(),
     val errorMessage: String? = null
@@ -166,7 +171,8 @@ data class LibraryUiState(
                     key = "movie-${movie.tmdbId}-$watchedDate",
                     item = movie,
                     detailText = "Movie",
-                    watchedDateEpochDay = watchedDate
+                    watchedDateEpochDay = watchedDate,
+                    runtimeMinutes = movie.runtimeMinutes
                 )
             }
 
@@ -190,11 +196,39 @@ data class LibraryUiState(
                         append(watch.episodeName)
                     },
                     watchedDateEpochDay =
-                        watch.watchedDateEpochDay
+                        watch.watchedDateEpochDay,
+                    runtimeMinutes = watch.runtimeMinutes
                 )
             }
 
-            return (movieEntries + episodeEntries)
+            val rewatchEntries = rewatchRecords.mapNotNull { record ->
+                val item = itemsByKey[record.mediaType to record.tmdbId]
+                    ?: return@mapNotNull null
+
+                val detail = if (record.mediaType == "movie") {
+                    "Movie • Rewatch"
+                } else {
+                    buildString {
+                        append(record.episodeCode ?: "Episode")
+                        if (record.episodeName.isNotBlank()) {
+                            append(" • ")
+                            append(record.episodeName)
+                        }
+                        append(" • Rewatch")
+                    }
+                }
+
+                WatchHistoryEntry(
+                    key = "rewatch-${record.id}",
+                    item = item,
+                    detailText = detail,
+                    watchedDateEpochDay = record.watchedDateEpochDay,
+                    runtimeMinutes = record.runtimeMinutes,
+                    isRewatch = true
+                )
+            }
+
+            return (movieEntries + episodeEntries + rewatchEntries)
                 .sortedWith(
                     compareByDescending<WatchHistoryEntry> { entry ->
                         entry.watchedDateEpochDay
@@ -242,11 +276,20 @@ data class LibraryUiState(
     val watchedEpisodeCount: Int
         get() = episodeWatches.size
 
+    val rewatchCount: Int
+        get() = rewatchRecords.size
+
     val movieWatchMinutes: Int
-        get() = watchedMovies.sumOf { it.runtimeMinutes ?: 0 }
+        get() = watchedMovies.sumOf { it.runtimeMinutes ?: 0 } +
+            rewatchRecords
+                .filter { it.mediaType == "movie" }
+                .sumOf { it.runtimeMinutes ?: 0 }
 
     val tvWatchMinutes: Int
-        get() = episodeWatches.sumOf { it.runtimeMinutes ?: 0 }
+        get() = episodeWatches.sumOf { it.runtimeMinutes ?: 0 } +
+            rewatchRecords
+                .filter { it.mediaType == "tv" }
+                .sumOf { it.runtimeMinutes ?: 0 }
 
     val totalWatchMinutes: Int
         get() = movieWatchMinutes + tvWatchMinutes
@@ -257,10 +300,8 @@ data class LibraryUiState(
                 .withDayOfMonth(1)
                 .toEpochDay()
 
-            return watchedMovies.count {
-                (it.watchDateEpochDay ?: Long.MIN_VALUE) >= firstDay
-            } + episodeWatches.count {
-                it.watchedDateEpochDay >= firstDay
+            return watchHistoryEntries.count { entry ->
+                entry.watchedDateEpochDay >= firstDay
             }
         }
 
@@ -271,10 +312,8 @@ data class LibraryUiState(
 
     val longestWatchStreak: Int
         get() {
-            val dates = (
-                watchedMovies.mapNotNull { it.watchDateEpochDay } +
-                    episodeWatches.map { it.watchedDateEpochDay }
-                )
+            val dates = watchHistoryEntries
+                .map { it.watchedDateEpochDay }
                 .distinct()
                 .sorted()
 
@@ -350,11 +389,10 @@ data class LibraryUiState(
                                 0
                             },
                             watchedDateEpochDay = titleEntries.maxOf { it.watchedDateEpochDay },
-                            totalMinutes = if (item.mediaType == "movie") {
-                                item.runtimeMinutes ?: 0
-                            } else {
-                                monthlyEpisodes.sumOf { it.runtimeMinutes ?: 0 }
-                            }
+                            totalMinutes = titleEntries.sumOf { entry ->
+                                entry.runtimeMinutes ?: 0
+                            },
+                            watchCount = titleEntries.size
                         )
                     }
                     .sortedByDescending { it.watchedDateEpochDay }
@@ -445,13 +483,15 @@ class LibraryViewModel(
             combine(
                 repository.observeAll(),
                 repository.observeAllEpisodeWatches(),
+                repository.observeAllRewatches(),
                 repository.observeCustomLists(),
                 repository.observeCustomListItems()
-            ) { items, episodeWatches, customLists, customListItems ->
+            ) { items, episodeWatches, rewatches, customLists, customListItems ->
                 LibraryUiState(
                     isLoading = false,
                     items = items,
                     episodeWatches = episodeWatches,
+                    rewatchRecords = rewatches,
                     customLists = customLists,
                     customListItems = customListItems,
                     errorMessage = null
@@ -776,7 +816,9 @@ class LibraryViewModel(
                         append(result.titleCount)
                         append(" titles, ")
                         append(result.episodeCount)
-                        append(" episodes and ")
+                        append(" episodes, ")
+                        append(result.rewatchCount)
+                        append(" rewatches and ")
                         append(result.customListCount)
                         append(" lists.")
                     }
