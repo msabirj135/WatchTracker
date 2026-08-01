@@ -1,6 +1,7 @@
 package com.sabir.watchtracker.data.remote
 
 import com.google.gson.annotations.SerializedName
+import com.sabir.watchtracker.BuildConfig
 
 data class TmdbMovieDetails(
     @SerializedName("id")
@@ -90,11 +91,11 @@ data class TmdbSearchResult(
 
     val posterUrl: String?
         get() = posterPath?.let { path ->
-            "https://image.tmdb.org/t/p/w500$path"
+            "${BuildConfig.TMDB_PROXY_BASE_URL.trimEnd('/')}/image/t/p/w500$path"
         }
 
     val backdropUrl: String?
         get() = backdropPath?.let { path ->
-            "https://image.tmdb.org/t/p/w780$path"
+            "${BuildConfig.TMDB_PROXY_BASE_URL.trimEnd('/')}/image/t/p/w780$path"
         }
 }
