@@ -34,6 +34,9 @@ interface RewatchRecordDao {
     @Query("DELETE FROM rewatch_records WHERE id = :id")
     suspend fun deleteById(id: Long)
 
+    @Query("UPDATE rewatch_records SET watchMethod = :watchMethod WHERE id = :id AND mediaType = 'movie'")
+    suspend fun updateMovieWatchMethod(id: Long, watchMethod: String)
+
     @Query("DELETE FROM rewatch_records WHERE tmdbId = :tmdbId AND mediaType = :mediaType")
     suspend fun deleteForTitle(
         tmdbId: Int,
