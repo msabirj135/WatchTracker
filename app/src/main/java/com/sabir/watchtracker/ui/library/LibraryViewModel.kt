@@ -467,6 +467,7 @@ class LibraryViewModel(
     private var upNextSignature: String? = null
 
     private val attemptedRuntimeIds = mutableSetOf<Int>()
+    private val attemptedGenreKeys = mutableSetOf<String>()
 
     private val coroutineScope = CoroutineScope(
         SupervisorJob() + Dispatchers.Main.immediate
@@ -530,6 +531,7 @@ class LibraryViewModel(
                 .collect { state ->
                     uiState.value = state
                     backfillMovieRuntimes(state.items)
+                    backfillGenreMetadata(state.items)
                     refreshUpNextIfNeeded(state)
                 }
         }
@@ -1014,6 +1016,39 @@ class LibraryViewModel(
                             runtimeMinutes = runtime
                         )
                     }
+            }
+        }
+    }
+
+    private fun backfillGenreMetadata(items: List<LibraryItem>) {
+        val missing = items.filter { item ->
+            item.genres.isEmpty() &&
+                attemptedGenreKeys.add("${item.mediaType}-${item.tmdbId}")
+        }
+
+        if (missing.isEmpty()) return
+
+        coroutineScope.launch(Dispatchers.IO) {
+            missing.forEach { item ->
+                val names = runCatching {
+                    if (item.mediaType == "movie") {
+                        tmdbRepository.getMovieDetails(item.tmdbId)
+                            .genres
+                            .map { genre -> genre.name }
+                    } else {
+                        tmdbRepository.getTvDetails(item.tmdbId)
+                            .genres
+                            .map { genre -> genre.name }
+                    }
+                }.getOrNull().orEmpty()
+
+                if (names.isNotEmpty()) {
+                    repository.updateGenres(
+                        tmdbId = item.tmdbId,
+                        mediaType = item.mediaType,
+                        genreNames = names
+                    )
+                }
             }
         }
     }
