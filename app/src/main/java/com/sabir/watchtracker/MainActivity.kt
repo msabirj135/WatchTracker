@@ -247,6 +247,12 @@ private fun WatchTrackerApp(
                             onHistoryClick = {
                                 historyIsOpen = true
                             },
+                            onMoviesClick = {
+                                selectedTab = 1
+                            },
+                            onTvShowsClick = {
+                                selectedTab = 2
+                            },
                             onMarkUpNextWatched =
                                 libraryViewModel::markUpNextWatched,
                             onRetryUpNext =
