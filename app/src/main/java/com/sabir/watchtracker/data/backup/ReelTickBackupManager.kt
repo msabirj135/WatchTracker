@@ -7,13 +7,14 @@ import com.sabir.watchtracker.data.local.CustomList
 import com.sabir.watchtracker.data.local.CustomListItem
 import com.sabir.watchtracker.data.local.EpisodeWatch
 import com.sabir.watchtracker.data.local.LibraryItem
+import com.sabir.watchtracker.data.local.RewatchRecord
 import com.sabir.watchtracker.data.local.WatchTrackerDatabase
 import java.time.LocalDate
 
 private const val BACKUP_IDENTIFIER =
     "com.sabir.watchtracker.reeltick-backup"
 
-private const val CURRENT_BACKUP_VERSION = 1
+private const val CURRENT_BACKUP_VERSION = 2
 
 enum class BackupImportMode {
     MERGE,
@@ -23,6 +24,7 @@ enum class BackupImportMode {
 data class BackupPreview(
     val titleCount: Int,
     val episodeCount: Int,
+    val rewatchCount: Int,
     val customListCount: Int,
     val exportedAtEpochMillis: Long
 )
@@ -30,6 +32,7 @@ data class BackupPreview(
 data class BackupRestoreResult(
     val titleCount: Int,
     val episodeCount: Int,
+    val rewatchCount: Int,
     val customListCount: Int
 )
 
@@ -39,6 +42,7 @@ private data class ReelTickBackupDocument(
     val exportedAtEpochMillis: Long = System.currentTimeMillis(),
     val libraryItems: List<LibraryItem> = emptyList(),
     val episodeWatches: List<EpisodeWatch> = emptyList(),
+    val rewatchRecords: List<RewatchRecord>? = emptyList(),
     val customLists: List<CustomList> = emptyList(),
     val customListItems: List<CustomListItem> = emptyList()
 )
@@ -53,6 +57,7 @@ class ReelTickBackupManager(
     private val libraryItemDao = database.libraryItemDao()
     private val episodeWatchDao = database.episodeWatchDao()
     private val customListDao = database.customListDao()
+    private val rewatchRecordDao = database.rewatchRecordDao()
 
     private val gson = GsonBuilder()
         .setPrettyPrinting()
@@ -64,6 +69,7 @@ class ReelTickBackupManager(
                 exportedAtEpochMillis = System.currentTimeMillis(),
                 libraryItems = libraryItemDao.getAllSnapshot(),
                 episodeWatches = episodeWatchDao.getAllSnapshot(),
+                rewatchRecords = rewatchRecordDao.getAllSnapshot(),
                 customLists = customListDao.getListsSnapshot(),
                 customListItems = customListDao.getItemsSnapshot()
             )
@@ -76,7 +82,8 @@ class ReelTickBackupManager(
         val snapshot = database.withTransaction {
             ReelTickBackupDocument(
                 libraryItems = libraryItemDao.getAllSnapshot(),
-                episodeWatches = episodeWatchDao.getAllSnapshot()
+                episodeWatches = episodeWatchDao.getAllSnapshot(),
+                rewatchRecords = rewatchRecordDao.getAllSnapshot()
             )
         }
 
@@ -141,6 +148,31 @@ class ReelTickBackupManager(
                 )
             }
 
+        snapshot.rewatchRecords.orEmpty()
+            .sortedByDescending { record -> record.watchedDateEpochDay }
+            .forEach { record ->
+                val item = itemsByKey[record.mediaType to record.tmdbId]
+                    ?: return@forEach
+
+                rows += listOf(
+                    item.title,
+                    if (record.mediaType == "movie") {
+                        "Movie rewatch"
+                    } else {
+                        "TV Show rewatch"
+                    },
+                    record.episodeCode.orEmpty(),
+                    record.episodeName,
+                    LocalDate.ofEpochDay(
+                        record.watchedDateEpochDay
+                    ).toString(),
+                    item.status.displayName,
+                    item.personalRating?.toString().orEmpty(),
+                    record.runtimeMinutes?.toString().orEmpty(),
+                    item.notes
+                )
+            }
+
         return rows.joinToString("\n") { row ->
             row.joinToString(",") { value ->
                 "\"${value.replace("\"", "\"\"")}\""
@@ -153,6 +185,7 @@ class ReelTickBackupManager(
             customListDao.deleteAllItems()
             customListDao.deleteAllLists()
             episodeWatchDao.deleteAll()
+            rewatchRecordDao.deleteAll()
             libraryItemDao.deleteAll()
         }
     }
@@ -163,6 +196,7 @@ class ReelTickBackupManager(
         return BackupPreview(
             titleCount = document.libraryItems.size,
             episodeCount = document.episodeWatches.size,
+            rewatchCount = document.rewatchRecords.orEmpty().size,
             customListCount = document.customLists.size,
             exportedAtEpochMillis = document.exportedAtEpochMillis
         )
@@ -187,6 +221,7 @@ class ReelTickBackupManager(
         return BackupRestoreResult(
             titleCount = document.libraryItems.size,
             episodeCount = document.episodeWatches.size,
+            rewatchCount = document.rewatchRecords.orEmpty().size,
             customListCount = document.customLists.size
         )
     }
@@ -197,10 +232,12 @@ class ReelTickBackupManager(
         customListDao.deleteAllItems()
         customListDao.deleteAllLists()
         episodeWatchDao.deleteAll()
+        rewatchRecordDao.deleteAll()
         libraryItemDao.deleteAll()
 
         libraryItemDao.upsertAll(document.libraryItems)
         episodeWatchDao.upsertAll(document.episodeWatches)
+        rewatchRecordDao.upsertAll(document.rewatchRecords.orEmpty())
         customListDao.upsertLists(document.customLists)
         customListDao.upsertItems(document.customListItems)
     }
@@ -231,6 +268,32 @@ class ReelTickBackupManager(
 
         libraryItemDao.upsertAll(mergedItems)
         episodeWatchDao.upsertAll(document.episodeWatches)
+
+        val existingRewatchKeys = rewatchRecordDao.getAllSnapshot()
+            .map { record ->
+                listOf(
+                    record.tmdbId,
+                    record.mediaType,
+                    record.seasonNumber,
+                    record.episodeNumber,
+                    record.watchedDateEpochDay
+                )
+            }
+            .toSet()
+
+        val newRewatches = document.rewatchRecords.orEmpty()
+            .filter { record ->
+                listOf(
+                    record.tmdbId,
+                    record.mediaType,
+                    record.seasonNumber,
+                    record.episodeNumber,
+                    record.watchedDateEpochDay
+                ) !in existingRewatchKeys
+            }
+            .map { record -> record.copy(id = 0) }
+
+        rewatchRecordDao.insertAll(newRewatches)
 
         val existingLists = customListDao.getListsSnapshot()
         val listIdMapping = mutableMapOf<Long, Long>()
@@ -332,6 +395,17 @@ class ReelTickBackupManager(
                     episode.watchedDateEpochDay > 0
             ) {
                 "The backup contains invalid episode information."
+            }
+        }
+
+        document.rewatchRecords.orEmpty().forEach { record ->
+            require(
+                (record.tmdbId to record.mediaType) in libraryKeys.toSet()
+            ) {
+                "The backup contains a rewatch without its title."
+            }
+            require(record.watchedDateEpochDay > 0) {
+                "The backup contains an invalid rewatch date."
             }
         }
 
