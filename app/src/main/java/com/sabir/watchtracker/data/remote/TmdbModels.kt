@@ -37,6 +37,14 @@ data class TmdbSearchResponse(
     val totalResults: Int = 0
 )
 
+data class TmdbFindResponse(
+    @SerializedName("movie_results")
+    val movieResults: List<TmdbSearchResult> = emptyList(),
+
+    @SerializedName("tv_results")
+    val tvResults: List<TmdbSearchResult> = emptyList()
+)
+
 data class TmdbSearchResult(
     @SerializedName("id")
     val id: Int,
