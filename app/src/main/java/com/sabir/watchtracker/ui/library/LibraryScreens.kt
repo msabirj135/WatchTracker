@@ -1367,7 +1367,7 @@ private fun LibraryGridCard(
                 if (item.mediaType == "tv") {
                     Text(
                         text = item.watchDateEpochDay?.let { date ->
-                            "Last watched: ${formatCompactEpochDay(date)}"
+                            "Last • ${formatCompactEpochDay(date)}"
                         } ?: "Not watched yet",
                         color = ScreenTextSecondary,
                         fontSize = 8.sp,
