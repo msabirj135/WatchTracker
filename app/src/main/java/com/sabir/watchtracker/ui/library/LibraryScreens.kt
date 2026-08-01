@@ -472,12 +472,6 @@ private fun WatchTimeSummaryCard(
     currentMonthMinutes: Int,
     previousMonthMinutes: Int
 ) {
-    val progress = if (currentMonthMinutes > 0 || previousMonthMinutes > 0) {
-        currentMonthMinutes.toFloat() /
-            maxOf(currentMonthMinutes, previousMonthMinutes, 1).toFloat()
-    } else {
-        0f
-    }
     val trendText = when {
         currentMonthMinutes == 0 && previousMonthMinutes == 0 -> "No monthly activity yet"
         previousMonthMinutes == 0 -> "New activity this month"
@@ -538,13 +532,6 @@ private fun WatchTimeSummaryCard(
                     maxLines = 1
                 )
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            LinearProgressIndicator(
-                progress = { progress.coerceIn(0f, 1f) },
-                modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(8.dp)),
-                color = ScreenPrimary,
-                trackColor = ScreenSurfaceLight
-            )
         }
     }
 }
