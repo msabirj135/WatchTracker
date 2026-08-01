@@ -372,7 +372,7 @@ class LibraryDetailViewModel(
         }
     }
 
-    fun addMovieRewatch(watchedDateEpochDay: Long) {
+    fun addMovieRewatch(watchedDateEpochDay: Long, watchMethod: String) {
         val movie = uiState.value.item ?: return
 
         viewModelScope.launch {
@@ -380,7 +380,8 @@ class LibraryDetailViewModel(
             try {
                 libraryRepository.addMovieRewatch(
                     movie = movie,
-                    watchedDateEpochDay = watchedDateEpochDay
+                    watchedDateEpochDay = watchedDateEpochDay,
+                    watchMethod = watchMethod
                 )
                 refreshItem()
                 setSaving(false)
@@ -388,6 +389,32 @@ class LibraryDetailViewModel(
                 setError(
                     exception.message ?: "Unable to save this rewatch."
                 )
+            }
+        }
+    }
+
+    fun updateMovieWatchMethod(watchMethod: String) {
+        val movie = uiState.value.item ?: return
+        viewModelScope.launch {
+            setSaving(true)
+            try {
+                libraryRepository.updateMovieWatchMethod(movie, watchMethod)
+                refreshItem()
+                setSaving(false)
+            } catch (exception: Exception) {
+                setError(exception.message ?: "Unable to update the watch method.")
+            }
+        }
+    }
+
+    fun updateMovieRewatchMethod(recordId: Long, watchMethod: String) {
+        viewModelScope.launch {
+            setSaving(true)
+            try {
+                libraryRepository.updateMovieRewatchMethod(recordId, watchMethod)
+                setSaving(false)
+            } catch (exception: Exception) {
+                setError(exception.message ?: "Unable to update this rewatch.")
             }
         }
     }
