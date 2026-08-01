@@ -43,6 +43,9 @@ data class TmdbTvDetails(
     @SerializedName("number_of_episodes")
     val numberOfEpisodes: Int = 0,
 
+    @SerializedName("genres")
+    val genres: List<TmdbGenre> = emptyList(),
+
     @SerializedName("seasons")
     val seasons: List<TmdbSeasonSummary> = emptyList()
 ) {
