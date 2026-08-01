@@ -131,7 +131,7 @@ fun SearchScreen(
                 MessageContent(
                     symbol = "⌕",
                     title = "No results found",
-                    message = "Try another movie or TV-show title."
+                    message = "Try a title with its year, or enter an IMDb ID."
                 )
             }
 
@@ -452,7 +452,7 @@ private fun SearchInput(
             modifier = Modifier.fillMaxWidth(),
             placeholder = {
                 Text(
-                    text = "Search movies and TV shows",
+                    text = "Title, title + year, or IMDb ID",
                     color = SearchTextSecondary
                 )
             },
