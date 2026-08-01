@@ -70,6 +70,8 @@ fun HomeScreen(
     onSearchClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onHistoryClick: () -> Unit,
+    onMoviesClick: () -> Unit,
+    onTvShowsClick: () -> Unit,
     onMarkUpNextWatched: (UpNextEntry, Long) -> Unit,
     onRetryUpNext: () -> Unit,
     onItemClick: (LibraryItem) -> Unit
@@ -96,7 +98,23 @@ fun HomeScreen(
             HomeSummary(
                 movieCount = libraryUiState.movieCount,
                 tvShowCount = libraryUiState.tvShowCount,
-                totalWatchMinutes = libraryUiState.totalWatchMinutes
+                totalWatchMinutes = libraryUiState.totalWatchMinutes,
+                currentMonthMinutes = libraryUiState.monthlyLists
+                    .firstOrNull { month ->
+                        val current = YearMonth.now()
+                        month.year == current.year && month.month == current.monthValue
+                    }
+                    ?.totalMinutes
+                    ?: 0,
+                previousMonthMinutes = libraryUiState.monthlyLists
+                    .firstOrNull { month ->
+                        val previous = YearMonth.now().minusMonths(1)
+                        month.year == previous.year && month.month == previous.monthValue
+                    }
+                    ?.totalMinutes
+                    ?: 0,
+                onMoviesClick = onMoviesClick,
+                onTvShowsClick = onTvShowsClick
             )
         }
 
@@ -369,32 +387,36 @@ private fun HomeHeader(
 private fun HomeSummary(
     movieCount: Int,
     tvShowCount: Int,
-    totalWatchMinutes: Int
+    totalWatchMinutes: Int,
+    currentMonthMinutes: Int,
+    previousMonthMinutes: Int,
+    onMoviesClick: () -> Unit,
+    onTvShowsClick: () -> Unit
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp),
-        horizontalArrangement =
-            Arrangement.spacedBy(12.dp)
+    Column(
+        modifier = Modifier.padding(horizontal = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        SummaryCard(
-            modifier = Modifier.weight(1f),
-            value = movieCount.toString(),
-            label = "Movies"
-        )
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            SummaryCard(
+                modifier = Modifier.weight(1f),
+                value = movieCount.toString(),
+                label = "Movies",
+                onClick = onMoviesClick
+            )
 
-        SummaryCard(
-            modifier = Modifier.weight(1f),
-            value = tvShowCount.toString(),
-            label = "TV Shows"
-        )
+            SummaryCard(
+                modifier = Modifier.weight(1f),
+                value = tvShowCount.toString(),
+                label = "TV Shows",
+                onClick = onTvShowsClick
+            )
+        }
 
-        SummaryCard(
-            modifier = Modifier.weight(1f),
-            value = formatHomeWatchTime(totalWatchMinutes),
-            label = "Watch time",
-            valueFontSize = 18
+        WatchTimeSummaryCard(
+            totalMinutes = totalWatchMinutes,
+            currentMonthMinutes = currentMonthMinutes,
+            previousMonthMinutes = previousMonthMinutes
         )
     }
 }
@@ -404,10 +426,10 @@ private fun SummaryCard(
     modifier: Modifier,
     value: String,
     label: String,
-    valueFontSize: Int = 24
+    onClick: () -> Unit
 ) {
     Card(
-        modifier = modifier,
+        modifier = modifier.clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = ScreenSurface
@@ -424,7 +446,7 @@ private fun SummaryCard(
                 text = value,
                 modifier = Modifier.height(44.dp),
                 color = ScreenTextPrimary,
-                fontSize = valueFontSize.sp,
+                fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
                 lineHeight = 20.sp,
@@ -439,6 +461,89 @@ private fun SummaryCard(
                 text = label,
                 color = ScreenTextSecondary,
                 fontSize = 12.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun WatchTimeSummaryCard(
+    totalMinutes: Int,
+    currentMonthMinutes: Int,
+    previousMonthMinutes: Int
+) {
+    val progress = if (currentMonthMinutes > 0 || previousMonthMinutes > 0) {
+        currentMonthMinutes.toFloat() /
+            maxOf(currentMonthMinutes, previousMonthMinutes, 1).toFloat()
+    } else {
+        0f
+    }
+    val trendText = when {
+        currentMonthMinutes == 0 && previousMonthMinutes == 0 -> "No monthly activity yet"
+        previousMonthMinutes == 0 -> "New activity this month"
+        currentMonthMinutes == previousMonthMinutes -> "Same as last month"
+        else -> {
+            val difference = ((currentMonthMinutes - previousMonthMinutes) * 100) /
+                previousMonthMinutes
+            if (difference > 0) "↑ $difference% vs last month" else "↓ ${-difference}% vs last month"
+        }
+    }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = ScreenSurface)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(18.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "TOTAL WATCH TIME",
+                        color = ScreenPrimary,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 1.2.sp
+                    )
+                    Spacer(modifier = Modifier.height(5.dp))
+                    Text(
+                        formatWatchHours(totalMinutes),
+                        color = ScreenTextPrimary,
+                        fontSize = 30.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .background(ScreenPrimary.copy(alpha = 0.13f), RoundedCornerShape(15.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("◷", color = ScreenPrimary, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "${formatWatchHours(currentMonthMinutes)} this month",
+                    modifier = Modifier.weight(1f),
+                    color = ScreenTextSecondary,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    trendText,
+                    color = ScreenTextSecondary,
+                    fontSize = 10.sp,
+                    maxLines = 1
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            LinearProgressIndicator(
+                progress = { progress.coerceIn(0f, 1f) },
+                modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(8.dp)),
+                color = ScreenPrimary,
+                trackColor = ScreenSurfaceLight
             )
         }
     }
@@ -546,7 +651,14 @@ private fun UpNextCard(
                     )
 
                     Text(
-                        text = episode.episodeCode,
+                        text = buildString {
+                            append(episode.episodeCode)
+                            episode.runtime?.takeIf { it > 0 }?.let { runtime ->
+                                append(" • ")
+                                append(runtime)
+                                append("m")
+                            }
+                        },
                         color = ScreenPrimary,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
@@ -836,7 +948,11 @@ private fun HistoryCard(
                 )
 
                 Text(
-                    text = entry.detailText,
+                    text = if (entry.isRewatch) {
+                        "↻ ${entry.detailText}"
+                    } else {
+                        entry.detailText
+                    },
                     modifier = Modifier.height(28.dp),
                     color = ScreenPrimary,
                     fontSize = 11.sp,
@@ -2235,16 +2351,12 @@ private fun formatWatchTime(totalMinutes: Int): String {
     }.joinToString(" ")
 }
 
-private fun formatHomeWatchTime(totalMinutes: Int): String {
+private fun formatWatchHours(totalMinutes: Int): String {
     if (totalMinutes <= 0) return "0m"
-    val days = totalMinutes / (24 * 60)
-    val hours = (totalMinutes % (24 * 60)) / 60
+    val hours = totalMinutes / 60
     val minutes = totalMinutes % 60
-
     return when {
-        days > 0 && minutes > 0 -> "${days}d ${hours}h\n${minutes}m"
-        days > 0 -> "${days}d ${hours}h"
-        hours > 0 && minutes > 0 -> "${hours}h\n${minutes}m"
+        hours > 0 && minutes > 0 -> "${hours}h ${minutes}m"
         hours > 0 -> "${hours}h"
         else -> "${minutes}m"
     }
