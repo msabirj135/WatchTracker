@@ -292,6 +292,7 @@ private fun WatchTrackerApp(
                             onBackClick = { selectedTab = 0 },
                             onCreateList = libraryViewModel::createCustomList,
                             onUpdateList = libraryViewModel::updateCustomList,
+                            onDuplicateList = libraryViewModel::duplicateCustomList,
                             onDeleteList = libraryViewModel::deleteCustomList,
                             onAddItem = libraryViewModel::addToCustomList,
                             onRemoveItem = libraryViewModel::removeFromCustomList,
