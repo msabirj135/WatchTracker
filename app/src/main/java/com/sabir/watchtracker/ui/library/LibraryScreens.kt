@@ -83,8 +83,7 @@ fun HomeScreen(
 ) {
     val context = LocalContext.current
 
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(3),
+    LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .background(ScreenBackground)
@@ -1180,7 +1179,8 @@ fun LibraryScreen(
     onAddClick: () -> Unit,
     onItemClick: (LibraryItem) -> Unit
 ) {
-    LazyColumn(
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(3),
         modifier = Modifier
             .fillMaxSize()
             .background(ScreenBackground)
