@@ -16,7 +16,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         CustomListItem::class,
         RewatchRecord::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 @TypeConverters(
@@ -111,6 +111,14 @@ abstract class WatchTrackerDatabase : RoomDatabase() {
             }
         }
 
+        private val migration5To6 = object : Migration(5, 6) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE library_items ADD COLUMN genreNames TEXT"
+                )
+            }
+        }
+
         @Volatile
         private var instance: WatchTrackerDatabase? = null
 
@@ -127,7 +135,8 @@ abstract class WatchTrackerDatabase : RoomDatabase() {
                         migration1To2,
                         migration2To3,
                         migration3To4,
-                        migration4To5
+                        migration4To5,
+                        migration5To6
                     )
                     .build()
                     .also { database ->
