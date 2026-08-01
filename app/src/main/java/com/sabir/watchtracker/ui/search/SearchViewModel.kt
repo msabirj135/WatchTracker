@@ -42,16 +42,49 @@ data class SearchUiState(
     val isLoadingSeason: Boolean = false,
     val tvDetailsErrorMessage: String? = null,
     val mediaFilter: SearchMediaFilter = SearchMediaFilter.ALL,
+    val yearFilter: Int? = null,
+    val languageFilter: String? = null,
     val recentSearches: List<String> = emptyList(),
     val savedItemKeys: Set<String> = emptySet()
 ) {
+    val availableYears: List<Int>
+        get() = results
+            .mapNotNull { result ->
+                result.displayYear.toIntOrNull()
+            }
+            .distinct()
+            .sortedDescending()
+
+    val availableLanguages: List<Pair<String, String>>
+        get() = results
+            .mapNotNull { result ->
+                result.originalLanguage
+                    ?.trim()
+                    ?.lowercase()
+                    ?.takeIf { code -> code.isNotBlank() }
+                    ?.let { code -> code to result.displayLanguage }
+            }
+            .distinctBy { (code, _) -> code }
+            .sortedBy { (_, name) -> name }
+
     val filteredResults: List<TmdbSearchResult>
         get() = results.filter { result ->
-            when (mediaFilter) {
+            val matchesMediaType = when (mediaFilter) {
                 SearchMediaFilter.ALL -> true
                 SearchMediaFilter.MOVIES -> result.mediaType == "movie"
                 SearchMediaFilter.TV_SHOWS -> result.mediaType == "tv"
             }
+
+            val matchesYear = yearFilter == null ||
+                result.displayYear.toIntOrNull() == yearFilter
+
+            val matchesLanguage = languageFilter == null ||
+                result.originalLanguage.equals(
+                    languageFilter,
+                    ignoreCase = true
+                )
+
+            matchesMediaType && matchesYear && matchesLanguage
         }
 }
 
@@ -125,7 +158,9 @@ class SearchViewModel(
         uiState.value = uiState.value.copy(
             isLoading = true,
             errorMessage = null,
-            hasSearched = true
+            hasSearched = true,
+            yearFilter = null,
+            languageFilter = null
         )
 
         searchJob = coroutineScope.launch {
@@ -190,6 +225,26 @@ class SearchViewModel(
     fun updateMediaFilter(filter: SearchMediaFilter) {
         uiState.value = uiState.value.copy(
             mediaFilter = filter
+        )
+    }
+
+    fun updateYearFilter(year: Int?) {
+        uiState.value = uiState.value.copy(
+            yearFilter = year
+        )
+    }
+
+    fun updateLanguageFilter(languageCode: String?) {
+        uiState.value = uiState.value.copy(
+            languageFilter = languageCode
+        )
+    }
+
+    fun clearResultFilters() {
+        uiState.value = uiState.value.copy(
+            mediaFilter = SearchMediaFilter.ALL,
+            yearFilter = null,
+            languageFilter = null
         )
     }
 
@@ -417,7 +472,10 @@ class SearchViewModel(
             seasonDetails = null,
             isLoadingTvDetails = false,
             isLoadingSeason = false,
-            tvDetailsErrorMessage = null
+            tvDetailsErrorMessage = null,
+            mediaFilter = SearchMediaFilter.ALL,
+            yearFilter = null,
+            languageFilter = null
         )
     }
 
