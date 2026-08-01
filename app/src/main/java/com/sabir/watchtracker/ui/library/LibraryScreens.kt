@@ -95,11 +95,17 @@ fun HomeScreen(
             )
         }
 
-        if (libraryUiState.continueWatching.isNotEmpty()) {
+        if (
+            libraryUiState.continueWatching.isNotEmpty() ||
+            upNextUiState.isLoading ||
+            upNextUiState.entries.isNotEmpty() ||
+            upNextUiState.upcomingEntries.isNotEmpty() ||
+            upNextUiState.errorMessage != null
+        ) {
             item {
                 SectionHeader(
                     title = "Up next",
-                    action = "${libraryUiState.continueWatching.size} shows"
+                    action = "${libraryUiState.tvQueueCandidates.size} shows"
                 )
             }
 
@@ -121,9 +127,16 @@ fun HomeScreen(
                     }
                 }
 
-                upNextUiState.entries.isEmpty() -> {
+                upNextUiState.entries.isEmpty() &&
+                    upNextUiState.upcomingEntries.isEmpty() -> {
                     item {
                         UpNextCaughtUpCard()
+                    }
+                }
+
+                upNextUiState.entries.isEmpty() -> {
+                    item {
+                        UpNextWaitingCard()
                     }
                 }
 
@@ -166,6 +179,32 @@ fun HomeScreen(
                                     }
                                 )
                             }
+                        }
+                    }
+                }
+            }
+
+            if (upNextUiState.upcomingEntries.isNotEmpty()) {
+                item {
+                    SectionHeader(
+                        title = "Coming soon",
+                        action = "${upNextUiState.upcomingEntries.size} shows"
+                    )
+                }
+
+                item {
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        contentPadding = PaddingValues(horizontal = 20.dp)
+                    ) {
+                        items(
+                            items = upNextUiState.upcomingEntries,
+                            key = { entry -> entry.key }
+                        ) { entry ->
+                            UpcomingEpisodeCard(
+                                entry = entry,
+                                onOpenShow = { onItemClick(entry.item) }
+                            )
                         }
                     }
                 }
@@ -628,6 +667,99 @@ private fun UpNextCaughtUpCard() {
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold
         )
+    }
+}
+
+@Composable
+private fun UpNextWaitingCard() {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        shape = RoundedCornerShape(17.dp),
+        colors = CardDefaults.cardColors(containerColor = ScreenSurface)
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Text(
+                text = "✓ You’re caught up",
+                color = ScreenSuccess,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "The next announced episodes are listed below.",
+                color = ScreenTextSecondary,
+                fontSize = 11.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun UpcomingEpisodeCard(
+    entry: UpcomingEpisodeEntry,
+    onOpenShow: () -> Unit
+) {
+    val airDate = entry.episode.parsedAirDate
+    val daysUntil = airDate?.let { date ->
+        java.time.temporal.ChronoUnit.DAYS.between(LocalDate.now(), date)
+    }
+    val dateText = when (daysUntil) {
+        0L -> "Airs today"
+        1L -> "Airs tomorrow"
+        null -> "Air date TBA"
+        else -> "Airs ${airDate?.format(DateTimeFormatter.ofPattern("dd MMM")) ?: "TBA"} • in $daysUntil days"
+    }
+
+    Card(
+        modifier = Modifier.width(280.dp),
+        onClick = onOpenShow,
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = ScreenSurface)
+    ) {
+        Row(modifier = Modifier.padding(12.dp)) {
+            LibraryPoster(
+                item = entry.item,
+                modifier = Modifier.width(72.dp).height(108.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(
+                modifier = Modifier.height(108.dp),
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = entry.item.title,
+                    color = ScreenTextPrimary,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(5.dp))
+                Text(
+                    text = "${entry.episode.episodeCode} • ${entry.episode.name}",
+                    color = ScreenPrimary,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(7.dp))
+                Text(
+                    text = dateText,
+                    color = ScreenSuccess,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                if (entry.productionStatus.isNotBlank()) {
+                    Text(
+                        text = entry.productionStatus,
+                        color = ScreenTextSecondary,
+                        fontSize = 10.sp
+                    )
+                }
+            }
+        }
     }
 }
 
