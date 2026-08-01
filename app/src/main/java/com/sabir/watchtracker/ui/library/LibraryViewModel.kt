@@ -429,11 +429,15 @@ data class LibraryUiState(
             .sortedWith(compareByDescending<MonthlyWatchList> { it.year }.thenByDescending { it.month })
 
     fun itemsForList(listId: Long): List<LibraryItem> {
-        val keys = customListItems
+        val itemByKey = items.associateBy { item ->
+            item.tmdbId to item.mediaType
+        }
+        return customListItems
             .filter { it.listId == listId }
-            .map { it.tmdbId to it.mediaType }
-            .toSet()
-        return items.filter { (it.tmdbId to it.mediaType) in keys }
+            .sortedByDescending { it.addedAt }
+            .mapNotNull { listItem ->
+                itemByKey[listItem.tmdbId to listItem.mediaType]
+            }
     }
 }
 
@@ -702,16 +706,31 @@ class LibraryViewModel(
         refreshUpNextIfNeeded(uiState.value)
     }
 
-    fun createCustomList(name: String, description: String) {
+    fun createCustomList(
+        name: String,
+        description: String,
+        colorKey: String,
+        iconKey: String
+    ) {
         coroutineScope.launch {
-            repository.createCustomList(name, description)
+            repository.createCustomList(name, description, colorKey, iconKey)
         }
     }
 
-    fun updateCustomList(list: CustomList, name: String, description: String) {
+    fun updateCustomList(
+        list: CustomList,
+        name: String,
+        description: String,
+        colorKey: String,
+        iconKey: String
+    ) {
         coroutineScope.launch {
-            repository.updateCustomList(list, name, description)
+            repository.updateCustomList(list, name, description, colorKey, iconKey)
         }
+    }
+
+    fun duplicateCustomList(list: CustomList) {
+        coroutineScope.launch { repository.duplicateCustomList(list) }
     }
 
     fun addToCustomList(listId: Long, item: LibraryItem) {
