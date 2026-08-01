@@ -1,4 +1,4 @@
-package com.sabir.watchtracker.data.repository
+﻿package com.sabir.watchtracker.data.repository
 
 import android.content.Context
 import com.sabir.watchtracker.data.local.EpisodeWatch
@@ -391,6 +391,29 @@ class LibraryRepository(
                 updatedAt = System.currentTimeMillis()
             )
         )
+    }
+
+    suspend fun markEpisodesWatched(
+        show: LibraryItem,
+        episodes: List<TmdbEpisode>,
+        watchedDateEpochDay: Long
+    ) {
+        if (episodes.isEmpty()) return
+
+        episodeWatchDao.upsertAll(
+            episodes.map { episode ->
+                EpisodeWatch(
+                    tmdbShowId = show.tmdbId,
+                    seasonNumber = episode.seasonNumber,
+                    episodeNumber = episode.episodeNumber,
+                    episodeName = episode.name,
+                    watchedDateEpochDay = watchedDateEpochDay,
+                    runtimeMinutes = episode.runtime
+                )
+            }
+        )
+
+        synchronizeTvProgress(show.tmdbId)
     }
 
     suspend fun unmarkEpisodeWatched(
