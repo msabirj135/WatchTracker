@@ -47,6 +47,12 @@ data class LibraryDetailUiState(
     val watchedCount: Int
         get() = episodeWatches.size
 
+    val airedEpisodes: List<TmdbEpisode>
+        get() = allEpisodes.filter { episode -> episode.hasAired }
+
+    val availableEpisodeCount: Int
+        get() = airedEpisodes.size
+
     val totalEpisodeCount: Int
         get() = allEpisodes.size
             .takeIf { count -> count > 0 }
@@ -61,10 +67,19 @@ data class LibraryDetailUiState(
         }
 
     val nextEpisode: TmdbEpisode?
-        get() = allEpisodes.firstOrNull { episode ->
+        get() = airedEpisodes.firstOrNull { episode ->
             (episode.seasonNumber to episode.episodeNumber) !in
                 watchedEpisodeKeys
         }
+
+    val nextUpcomingEpisode: TmdbEpisode?
+        get() = allEpisodes
+            .filter { episode -> !episode.hasAired }
+            .sortedBy { episode -> episode.parsedAirDate }
+            .firstOrNull()
+
+    val isCaughtUp: Boolean
+        get() = episodeWatches.isNotEmpty() && nextEpisode == null
 }
 
 class LibraryDetailViewModel(
@@ -241,17 +256,19 @@ class LibraryDetailViewModel(
     fun markSeriesCompleted() {
         val state = uiState.value
         val show = state.item ?: return
-        val remainingEpisodes = state.allEpisodes.filter { episode ->
+        val remainingEpisodes = state.airedEpisodes.filter { episode ->
             (episode.seasonNumber to episode.episodeNumber) !in
                 state.watchedEpisodeKeys
         }
 
+        if (remainingEpisodes.isEmpty()) return
+
         viewModelScope.launch {
             setSaving(true)
             try {
-                libraryRepository.markSeriesCompleted(
+                libraryRepository.markEpisodesWatched(
                     show = show,
-                    remainingEpisodes = remainingEpisodes,
+                    episodes = remainingEpisodes,
                     watchedDateEpochDay = LocalDate.now().toEpochDay()
                 )
                 refreshItem()
@@ -272,8 +289,9 @@ class LibraryDetailViewModel(
         val state = uiState.value
         val show = state.item ?: return
         val remainingEpisodes = season.episodes.filter { episode ->
-            (episode.seasonNumber to episode.episodeNumber) !in
-                state.watchedEpisodeKeys
+            episode.hasAired &&
+                (episode.seasonNumber to episode.episodeNumber) !in
+                    state.watchedEpisodeKeys
         }
 
         if (remainingEpisodes.isEmpty()) return
