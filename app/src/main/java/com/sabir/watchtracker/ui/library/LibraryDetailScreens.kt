@@ -94,10 +94,12 @@ fun LibraryItemDetailScreen(
             onDeleteClick = { showDeleteConfirmation = true },
             onMarkNextEpisode = detailViewModel::markNextEpisodeWatched,
             onMarkSeriesCompleted = detailViewModel::markSeriesCompleted,
+            onMarkSeasonWatched = detailViewModel::markSeasonWatched,
             onMarkEpisode = detailViewModel::markEpisodeWatched,
             onUnmarkEpisode = detailViewModel::unmarkEpisodeWatched,
             onRatingChange = detailViewModel::updatePersonalRating,
-            onClearError = detailViewModel::clearError
+            onClearError = detailViewModel::clearError,
+            onRetryLoad = detailViewModel::retryLoadTvDetails
         )
     } else {
         MovieDetailScreen(
@@ -150,10 +152,12 @@ private fun TvShowDetailScreen(
     onDeleteClick: () -> Unit,
     onMarkNextEpisode: () -> Unit,
     onMarkSeriesCompleted: () -> Unit,
+    onMarkSeasonWatched: (TmdbSeasonDetails, Long) -> Unit,
     onMarkEpisode: (TmdbEpisode, Long) -> Unit,
     onUnmarkEpisode: (TmdbEpisode) -> Unit,
     onRatingChange: (Double?) -> Unit,
-    onClearError: () -> Unit
+    onClearError: () -> Unit,
+    onRetryLoad: () -> Unit
 ) {
     val context = LocalContext.current
 
@@ -257,7 +261,8 @@ private fun TvShowDetailScreen(
             item {
                 ErrorCard(
                     message = uiState.errorMessage,
-                    onDismiss = onClearError
+                    onDismiss = onClearError,
+                    onRetry = onRetryLoad
                 )
             }
         }
@@ -285,6 +290,7 @@ private fun TvShowDetailScreen(
                     expanded = season.seasonNumber in
                         expandedSeasons,
                     watchedByKey = watchedByKey,
+                    isSaving = uiState.isSaving,
                     onToggle = {
                         expandedSeasons =
                             if (
@@ -297,6 +303,20 @@ private fun TvShowDetailScreen(
                                 expandedSeasons +
                                     season.seasonNumber
                             }
+                    },
+                    onMarkRemaining = {
+                        showDatePicker(
+                            context = context,
+                            initialEpochDay = LocalDate
+                                .now()
+                                .toEpochDay(),
+                            onDateSelected = { epochDay ->
+                                onMarkSeasonWatched(
+                                    season,
+                                    epochDay
+                                )
+                            }
+                        )
                     },
                     onEpisodeClick = { episode ->
                         val existingWatch = watchedByKey[
@@ -868,7 +888,9 @@ private fun SeasonCard(
     season: TmdbSeasonDetails,
     expanded: Boolean,
     watchedByKey: Map<Pair<Int, Int>, EpisodeWatch>,
+    isSaving: Boolean,
     onToggle: () -> Unit,
+    onMarkRemaining: () -> Unit,
     onEpisodeClick: (TmdbEpisode) -> Unit
 ) {
     val watchedCount = season.episodes.count { episode ->
@@ -876,6 +898,8 @@ private fun SeasonCard(
             episode.seasonNumber to episode.episodeNumber
         )
     }
+
+    val remainingCount = season.episodes.size - watchedCount
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -918,6 +942,22 @@ private fun SeasonCard(
             }
 
             if (expanded) {
+                if (remainingCount > 0) {
+                    TextButton(
+                        onClick = onMarkRemaining,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp),
+                        enabled = !isSaving
+                    ) {
+                        Text(
+                            text = "Mark $remainingCount remaining watched",
+                            color = DetailSuccess,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
                 season.episodes
                     .sortedBy { episode ->
                         episode.episodeNumber
@@ -1169,7 +1209,8 @@ private fun LoadingDetails() {
 @Composable
 private fun ErrorCard(
     message: String,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onRetry: (() -> Unit)? = null
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -1191,13 +1232,23 @@ private fun ErrorCard(
                 fontSize = 12.sp
             )
 
-            TextButton(
-                onClick = onDismiss
-            ) {
-                Text(
-                    text = "×",
-                    color = DetailPrimary
-                )
+            if (onRetry != null) {
+                TextButton(onClick = onRetry) {
+                    Text(
+                        text = "Retry",
+                        color = DetailPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            } else {
+                TextButton(
+                    onClick = onDismiss
+                ) {
+                    Text(
+                        text = "×",
+                        color = DetailPrimary
+                    )
+                }
             }
         }
     }
