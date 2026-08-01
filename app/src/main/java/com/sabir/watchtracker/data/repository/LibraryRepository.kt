@@ -218,7 +218,7 @@ class LibraryRepository(
         status: LibraryStatus,
         watchDateEpochDay: Long?,
         personalRating: Double?,
-        notes: String,
+        watchMethod: String?,
         currentSeason: Int? = null,
         currentEpisode: Int? = null,
         totalSeasons: Int? = null,
@@ -256,7 +256,7 @@ class LibraryRepository(
             status = status,
             watchDateEpochDay = watchDateEpochDay,
             personalRating = sanitizedRating,
-            notes = notes.trim(),
+            notes = existingItem?.notes.orEmpty(),
             currentSeason = currentSeason
                 ?: existingItem?.currentSeason,
             currentEpisode = currentEpisode
@@ -273,6 +273,11 @@ class LibraryRepository(
             ).takeIf { names -> names.isNotEmpty() }
                 ?.joinToString("|")
                 ?: existingItem?.genreNames,
+            watchMethod = if (mediaType == "movie" && watchDateEpochDay != null) {
+                watchMethod
+            } else {
+                existingItem?.watchMethod
+            },
             addedAt = existingItem?.addedAt
                 ?: currentTime,
             updatedAt = currentTime
