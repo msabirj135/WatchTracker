@@ -1364,7 +1364,17 @@ private fun LibraryGridCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.height(5.dp))
-                if (item.mediaType != "tv") {
+                if (item.mediaType == "tv") {
+                    Text(
+                        text = item.watchDateEpochDay?.let { date ->
+                            "Last watched: ${formatCompactEpochDay(date)}"
+                        } ?: "Not watched yet",
+                        color = ScreenTextSecondary,
+                        fontSize = 8.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                } else {
                     Text(
                         text = item.personalRating?.let { rating ->
                             "★ ${formatRating(rating)}"
