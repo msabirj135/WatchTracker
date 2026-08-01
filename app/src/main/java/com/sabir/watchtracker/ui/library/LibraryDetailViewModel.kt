@@ -170,6 +170,18 @@ class LibraryDetailViewModel(
         }
     }
 
+    fun retryLoadTvDetails() {
+        val item = uiState.value.item
+            ?.takeIf { current -> current.mediaType == "tv" }
+            ?: return
+
+        uiState.value = uiState.value.copy(
+            isLoading = true,
+            errorMessage = null
+        )
+        loadTvDetails(item)
+    }
+
     fun markEpisodeWatched(
         episode: TmdbEpisode,
         watchedDateEpochDay: Long
@@ -229,6 +241,38 @@ class LibraryDetailViewModel(
                 setError(
                     exception.message
                         ?: "Unable to mark this series completed."
+                )
+            }
+        }
+    }
+
+    fun markSeasonWatched(
+        season: TmdbSeasonDetails,
+        watchedDateEpochDay: Long
+    ) {
+        val state = uiState.value
+        val show = state.item ?: return
+        val remainingEpisodes = season.episodes.filter { episode ->
+            (episode.seasonNumber to episode.episodeNumber) !in
+                state.watchedEpisodeKeys
+        }
+
+        if (remainingEpisodes.isEmpty()) return
+
+        viewModelScope.launch {
+            setSaving(true)
+            try {
+                libraryRepository.markEpisodesWatched(
+                    show = show,
+                    episodes = remainingEpisodes,
+                    watchedDateEpochDay = watchedDateEpochDay
+                )
+                refreshItem()
+                setSaving(false)
+            } catch (exception: Exception) {
+                setError(
+                    exception.message
+                        ?: "Unable to mark this season watched."
                 )
             }
         }
