@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sabir.watchtracker.data.local.LibraryItem
 import com.sabir.watchtracker.ui.library.HomeScreen
+import com.sabir.watchtracker.ui.library.HistoryScreen
 import com.sabir.watchtracker.ui.library.LibraryItemDetailScreen
 import com.sabir.watchtracker.ui.library.LibraryScreen
 import com.sabir.watchtracker.ui.library.LibraryViewModel
@@ -88,6 +89,10 @@ private fun WatchTrackerApp(
         mutableStateOf(false)
     }
 
+    var historyIsOpen by remember {
+        mutableStateOf(false)
+    }
+
     var selectedLibraryItem by remember {
         mutableStateOf<LibraryItem?>(null)
     }
@@ -96,6 +101,7 @@ private fun WatchTrackerApp(
         enabled = selectedLibraryItem != null ||
             searchIsOpen ||
             settingsIsOpen ||
+            historyIsOpen ||
             selectedTab != 0
     ) {
         when {
@@ -109,6 +115,10 @@ private fun WatchTrackerApp(
 
             settingsIsOpen -> {
                 settingsIsOpen = false
+            }
+
+            historyIsOpen -> {
+                historyIsOpen = false
             }
 
             selectedTab != 0 -> {
@@ -163,6 +173,16 @@ private fun WatchTrackerApp(
                 onClearBackupMessage =
                     libraryViewModel::clearBackupMessage,
                 onClearAllData = libraryViewModel::clearAllData
+            )
+        } else if (historyIsOpen) {
+            HistoryScreen(
+                state = libraryUiState,
+                onBackClick = {
+                    historyIsOpen = false
+                },
+                onItemClick = { item ->
+                    selectedLibraryItem = item
+                }
             )
         } else {
             Scaffold(
@@ -219,6 +239,9 @@ private fun WatchTrackerApp(
                             },
                             onSettingsClick = {
                                 settingsIsOpen = true
+                            },
+                            onHistoryClick = {
+                                historyIsOpen = true
                             },
                             onMarkUpNextWatched =
                                 libraryViewModel::markUpNextWatched,
