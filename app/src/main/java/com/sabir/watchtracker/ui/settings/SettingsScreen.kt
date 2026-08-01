@@ -178,7 +178,7 @@ fun SettingsScreen(
             text = {
                 Column {
                     Text(
-                        text = "${preview.titleCount} titles • ${preview.episodeCount} episodes • ${preview.customListCount} lists",
+                        text = "${preview.titleCount} titles • ${preview.episodeCount} episodes • ${preview.rewatchCount} rewatches • ${preview.customListCount} lists",
                         color = SettingsTextPrimary
                     )
                     Spacer(modifier = Modifier.height(10.dp))
@@ -456,6 +456,7 @@ private fun DatabaseInformationCard(state: LibraryUiState) {
             "Watched episodes",
             state.watchedEpisodeCount.toString()
         )
+        InformationRow("Rewatches", state.rewatchCount.toString())
         InformationRow("Custom lists", state.customLists.size.toString())
     }
 }
