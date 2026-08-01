@@ -33,6 +33,7 @@ import com.sabir.watchtracker.ui.library.LibraryViewModel
 import com.sabir.watchtracker.ui.library.ListsScreen
 import com.sabir.watchtracker.ui.library.StatisticsScreen
 import com.sabir.watchtracker.ui.search.SearchScreen
+import com.sabir.watchtracker.ui.settings.SettingsScreen
 
 private val AppBackground = Color(0xFF090B10)
 private val AppSurface = Color(0xFF12151D)
@@ -83,6 +84,10 @@ private fun WatchTrackerApp(
         mutableStateOf(false)
     }
 
+    var settingsIsOpen by remember {
+        mutableStateOf(false)
+    }
+
     var selectedLibraryItem by remember {
         mutableStateOf<LibraryItem?>(null)
     }
@@ -90,6 +95,7 @@ private fun WatchTrackerApp(
     BackHandler(
         enabled = selectedLibraryItem != null ||
             searchIsOpen ||
+            settingsIsOpen ||
             selectedTab != 0
     ) {
         when {
@@ -99,6 +105,10 @@ private fun WatchTrackerApp(
 
             searchIsOpen -> {
                 searchIsOpen = false
+            }
+
+            settingsIsOpen -> {
+                settingsIsOpen = false
             }
 
             selectedTab != 0 -> {
@@ -134,6 +144,25 @@ private fun WatchTrackerApp(
                 onBackClick = {
                     searchIsOpen = false
                 }
+            )
+        } else if (settingsIsOpen) {
+            SettingsScreen(
+                libraryUiState = libraryUiState,
+                backupUiState = backupUiState,
+                onBackClick = {
+                    settingsIsOpen = false
+                },
+                onExportBackup = libraryViewModel::exportBackup,
+                onExportCsv = libraryViewModel::exportHistoryCsv,
+                onInspectBackup = libraryViewModel::inspectBackup,
+                onRestoreBackup = libraryViewModel::restoreBackup,
+                onRestoreSafetyBackup =
+                    libraryViewModel::restoreSafetyBackup,
+                onDismissBackupPreview =
+                    libraryViewModel::dismissBackupPreview,
+                onClearBackupMessage =
+                    libraryViewModel::clearBackupMessage,
+                onClearAllData = libraryViewModel::clearAllData
             )
         } else {
             Scaffold(
@@ -187,6 +216,9 @@ private fun WatchTrackerApp(
                             upNextUiState = upNextUiState,
                             onSearchClick = {
                                 searchIsOpen = true
+                            },
+                            onSettingsClick = {
+                                settingsIsOpen = true
                             },
                             onMarkUpNextWatched =
                                 libraryViewModel::markUpNextWatched,
@@ -248,14 +280,6 @@ private fun WatchTrackerApp(
                         StatisticsScreen(
                             paddingValues = innerPadding,
                             libraryUiState = libraryUiState,
-                            backupUiState = backupUiState,
-                            onExportBackup = libraryViewModel::exportBackup,
-                            onInspectBackup = libraryViewModel::inspectBackup,
-                            onRestoreBackup = libraryViewModel::restoreBackup,
-                            onDismissBackupPreview =
-                                libraryViewModel::dismissBackupPreview,
-                            onClearBackupMessage =
-                                libraryViewModel::clearBackupMessage,
                             onBackClick = { selectedTab = 0 }
                         )
                     }
