@@ -182,6 +182,12 @@ class LibraryDetailViewModel(
                     }
                 )
 
+                libraryRepository.updateGenres(
+                    tmdbId = item.tmdbId,
+                    mediaType = "tv",
+                    genreNames = details.genres.map { genre -> genre.name }
+                )
+
                 libraryRepository.synchronizeTvProgress(
                     tmdbShowId = item.tmdbId
                 )
