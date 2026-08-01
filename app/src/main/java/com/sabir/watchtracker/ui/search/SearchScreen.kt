@@ -184,7 +184,7 @@ fun SearchScreen(
                     status,
                     watchDateEpochDay,
                     personalRating,
-                    notes,
+                    watchMethod,
                     selectedEpisode ->
 
                 searchViewModel.saveToLibrary(
@@ -192,7 +192,7 @@ fun SearchScreen(
                     status = status,
                     watchDateEpochDay = watchDateEpochDay,
                     personalRating = personalRating,
-                    notes = notes,
+                    watchMethod = watchMethod,
                     selectedEpisode = selectedEpisode
                 )
             }
