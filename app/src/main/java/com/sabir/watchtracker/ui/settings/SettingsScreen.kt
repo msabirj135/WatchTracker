@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import com.sabir.watchtracker.BuildConfig
 import com.sabir.watchtracker.data.backup.BackupImportMode
 import com.sabir.watchtracker.ui.library.BackupUiState
+import com.sabir.watchtracker.ui.library.DataHealthUiState
 import com.sabir.watchtracker.ui.library.LibraryUiState
 import java.time.Instant
 import java.time.LocalDate
@@ -62,6 +63,7 @@ private val SettingsTextSecondary = Color(0xFF9A9DA8)
 fun SettingsScreen(
     libraryUiState: LibraryUiState,
     backupUiState: BackupUiState,
+    dataHealthUiState: DataHealthUiState,
     onBackClick: () -> Unit,
     onExportBackup: (Uri) -> Unit,
     onExportCsv: (Uri) -> Unit,
@@ -70,7 +72,9 @@ fun SettingsScreen(
     onRestoreSafetyBackup: () -> Unit,
     onDismissBackupPreview: () -> Unit,
     onClearBackupMessage: () -> Unit,
-    onClearAllData: () -> Unit
+    onClearAllData: () -> Unit,
+    onRunHealthCheck: () -> Unit,
+    onRepairData: () -> Unit
 ) {
     var showClearConfirmation by remember {
         mutableStateOf(false)
@@ -147,6 +151,14 @@ fun SettingsScreen(
 
         item {
             DatabaseInformationCard(libraryUiState)
+        }
+
+        item {
+            DataHealthCard(
+                state = dataHealthUiState,
+                onCheck = onRunHealthCheck,
+                onRepair = onRepairData
+            )
         }
 
         item {
@@ -458,6 +470,88 @@ private fun DatabaseInformationCard(state: LibraryUiState) {
         )
         InformationRow("Rewatches", state.rewatchCount.toString())
         InformationRow("Custom lists", state.customLists.size.toString())
+    }
+}
+
+@Composable
+private fun DataHealthCard(
+    state: DataHealthUiState,
+    onCheck: () -> Unit,
+    onRepair: () -> Unit
+) {
+    SettingsCard(title = "Data health") {
+        when {
+            state.isWorking -> {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(22.dp),
+                        color = SettingsPrimary,
+                        strokeWidth = 3.dp
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text("Repairing database…", color = SettingsTextSecondary)
+                }
+            }
+            !state.hasRun -> {
+                Text(
+                    "Check your library for detached records, future watch dates and incomplete title metadata.",
+                    color = SettingsTextSecondary,
+                    fontSize = 12.sp
+                )
+            }
+            else -> {
+                Text(
+                    if (state.isHealthy) "✓ Database structure is healthy" else "Review recommended",
+                    color = if (state.isHealthy) SettingsSuccess else SettingsPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                InformationRow("Orphaned records", state.orphanedRecords.toString())
+                InformationRow("Future watch dates", state.futureDatedRecords.toString())
+                InformationRow("Titles missing metadata", state.missingMetadataTitles.toString())
+                if (state.futureDatedRecords > 0) {
+                    Text(
+                        "Future dates are reported but never changed automatically. Edit them from the title or episode screen.",
+                        modifier = Modifier.padding(top = 8.dp),
+                        color = SettingsTextSecondary,
+                        fontSize = 10.sp
+                    )
+                }
+                if (state.missingMetadataTitles > 0) {
+                    Text(
+                        "Metadata is refreshed automatically when TMDB is reachable.",
+                        modifier = Modifier.padding(top = 6.dp),
+                        color = SettingsTextSecondary,
+                        fontSize = 10.sp
+                    )
+                }
+            }
+        }
+
+        state.message?.let { message ->
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(message, color = SettingsSuccess, fontSize = 11.sp)
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            SettingsActionButton(
+                modifier = Modifier.weight(1f),
+                text = if (state.hasRun) "Check again" else "Run check",
+                enabled = !state.isWorking,
+                primary = true,
+                onClick = onCheck
+            )
+            SettingsActionButton(
+                modifier = Modifier.weight(1f),
+                text = "Safe repair",
+                enabled = !state.isWorking && state.hasRun && state.orphanedRecords > 0,
+                onClick = onRepair
+            )
+        }
     }
 }
 
