@@ -1,4 +1,4 @@
-package com.sabir.watchtracker.data.local
+﻿package com.sabir.watchtracker.data.local
 
 import androidx.room.Dao
 import androidx.room.Query
@@ -7,6 +7,9 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface EpisodeWatchDao {
+
+    @Query("SELECT * FROM episode_watches")
+    suspend fun getAllSnapshot(): List<EpisodeWatch>
 
     @Query(
         """
@@ -28,6 +31,9 @@ interface EpisodeWatchDao {
     suspend fun upsertAll(
         episodeWatches: List<EpisodeWatch>
     )
+
+    @Query("DELETE FROM episode_watches")
+    suspend fun deleteAll()
 
     @Query(
         """
