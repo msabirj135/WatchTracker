@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.sabir.watchtracker.data.local.EpisodeWatch
 import com.sabir.watchtracker.data.local.LibraryItem
+import com.sabir.watchtracker.data.local.RewatchRecord
 import com.sabir.watchtracker.data.remote.TmdbEpisode
 import com.sabir.watchtracker.data.remote.TmdbSeasonDetails
 import com.sabir.watchtracker.data.remote.TmdbTvDetails
@@ -22,6 +23,7 @@ data class LibraryDetailUiState(
     val tvDetails: TmdbTvDetails? = null,
     val seasons: List<TmdbSeasonDetails> = emptyList(),
     val episodeWatches: List<EpisodeWatch> = emptyList(),
+    val rewatchRecords: List<RewatchRecord> = emptyList(),
     val isLoading: Boolean = false,
     val isSaving: Boolean = false,
     val errorMessage: String? = null
@@ -76,6 +78,7 @@ class LibraryDetailViewModel(
     private val tmdbRepository = TmdbRepository()
 
     private var episodeObservationJob: Job? = null
+    private var rewatchObservationJob: Job? = null
     private var loadedItemKey: String? = null
 
     var uiState = mutableStateOf(
@@ -95,15 +98,31 @@ class LibraryDetailViewModel(
 
         loadedItemKey = itemKey
         episodeObservationJob?.cancel()
+        rewatchObservationJob?.cancel()
 
         uiState.value = LibraryDetailUiState(
             item = item,
             isLoading = item.mediaType == "tv"
         )
 
+        observeRewatches(item)
+
         if (item.mediaType == "tv") {
             observeEpisodes(item.tmdbId)
             loadTvDetails(item)
+        }
+    }
+
+    private fun observeRewatches(item: LibraryItem) {
+        rewatchObservationJob = viewModelScope.launch {
+            libraryRepository.observeRewatches(
+                tmdbId = item.tmdbId,
+                mediaType = item.mediaType
+            ).collect { records ->
+                uiState.value = uiState.value.copy(
+                    rewatchRecords = records
+                )
+            }
         }
     }
 
@@ -324,6 +343,64 @@ class LibraryDetailViewModel(
                 setError(
                     exception.message
                         ?: "Unable to update the watched date."
+                )
+            }
+        }
+    }
+
+    fun addMovieRewatch(watchedDateEpochDay: Long) {
+        val movie = uiState.value.item ?: return
+
+        viewModelScope.launch {
+            setSaving(true)
+            try {
+                libraryRepository.addMovieRewatch(
+                    movie = movie,
+                    watchedDateEpochDay = watchedDateEpochDay
+                )
+                refreshItem()
+                setSaving(false)
+            } catch (exception: Exception) {
+                setError(
+                    exception.message ?: "Unable to save this rewatch."
+                )
+            }
+        }
+    }
+
+    fun addEpisodeRewatch(
+        episode: TmdbEpisode,
+        watchedDateEpochDay: Long
+    ) {
+        val show = uiState.value.item ?: return
+
+        viewModelScope.launch {
+            setSaving(true)
+            try {
+                libraryRepository.addEpisodeRewatch(
+                    show = show,
+                    episode = episode,
+                    watchedDateEpochDay = watchedDateEpochDay
+                )
+                refreshItem()
+                setSaving(false)
+            } catch (exception: Exception) {
+                setError(
+                    exception.message ?: "Unable to save this episode rewatch."
+                )
+            }
+        }
+    }
+
+    fun deleteRewatch(recordId: Long) {
+        viewModelScope.launch {
+            setSaving(true)
+            try {
+                libraryRepository.deleteRewatch(recordId)
+                setSaving(false)
+            } catch (exception: Exception) {
+                setError(
+                    exception.message ?: "Unable to remove this rewatch."
                 )
             }
         }
