@@ -20,7 +20,8 @@ data class RewatchRecord(
     val episodeName: String,
     val watchedDateEpochDay: Long,
     val runtimeMinutes: Int?,
-    val createdAt: Long
+    val createdAt: Long,
+    val watchMethod: String? = null
 ) {
     val episodeCode: String?
         get() = if (
