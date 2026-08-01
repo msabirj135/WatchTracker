@@ -31,6 +31,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,6 +50,7 @@ import coil3.compose.AsyncImage
 import com.sabir.watchtracker.data.local.LibraryItem
 import com.sabir.watchtracker.data.local.LibraryStatus
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 
 private val ScreenBackground = Color(0xFF090B10)
@@ -1445,6 +1450,28 @@ fun StatisticsScreen(
     libraryUiState: LibraryUiState,
     onBackClick: () -> Unit
 ) {
+    val availableYears = remember(libraryUiState.watchHistoryEntries) {
+        libraryUiState.watchHistoryEntries
+            .map { entry ->
+                LocalDate.ofEpochDay(entry.watchedDateEpochDay).year
+            }
+            .distinct()
+            .sorted()
+            .ifEmpty { listOf(LocalDate.now().year) }
+    }
+    var selectedYear by remember(availableYears) {
+        mutableIntStateOf(availableYears.last())
+    }
+    val yearSummary = remember(
+        libraryUiState.watchHistoryEntries,
+        selectedYear
+    ) {
+        calculateAdvancedYearSummary(
+            entries = libraryUiState.watchHistoryEntries,
+            year = selectedYear
+        )
+    }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -1490,6 +1517,19 @@ fun StatisticsScreen(
         }
 
         item { WatchTimeHeroCard(libraryUiState) }
+
+        item {
+            StatisticsYearSelector(
+                years = availableYears,
+                selectedYear = selectedYear,
+                onYearSelected = { year -> selectedYear = year }
+            )
+        }
+
+        item { AnnualSummaryCard(yearSummary) }
+        item { ViewingPatternsCard(yearSummary) }
+        item { TopGenresCard(yearSummary.topGenres) }
+        item { RewatchInsightsCard(yearSummary) }
 
         item {
             Row(
@@ -1549,6 +1589,355 @@ fun StatisticsScreen(
 
         item { WatchTimeSplitCard(libraryUiState) }
         item { StatusDistributionCard(libraryUiState) }
+    }
+}
+
+private data class AdvancedYearSummary(
+    val year: Int,
+    val totalEntries: Int,
+    val movieWatches: Int,
+    val episodeWatches: Int,
+    val totalMinutes: Int,
+    val activeDays: Int,
+    val averageMinutesPerActiveDay: Int,
+    val favoriteDay: String,
+    val busiestMonth: String,
+    val rewatchCount: Int,
+    val rewatchRate: Int,
+    val mostRewatchedTitle: String?,
+    val topGenres: List<Pair<String, Int>>
+)
+
+private fun calculateAdvancedYearSummary(
+    entries: List<WatchHistoryEntry>,
+    year: Int
+): AdvancedYearSummary {
+    val yearEntries = entries.filter { entry ->
+        LocalDate.ofEpochDay(entry.watchedDateEpochDay).year == year
+    }
+    val activeDays = yearEntries
+        .map { entry -> entry.watchedDateEpochDay }
+        .distinct()
+        .size
+    val totalMinutes = yearEntries.sumOf { entry ->
+        entry.runtimeMinutes ?: 0
+    }
+    val favoriteDay = yearEntries
+        .groupingBy { entry ->
+            LocalDate.ofEpochDay(entry.watchedDateEpochDay).dayOfWeek
+        }
+        .eachCount()
+        .maxByOrNull { it.value }
+        ?.key
+        ?.name
+        ?.lowercase()
+        ?.replaceFirstChar { it.uppercase() }
+        ?: "—"
+    val busiestMonth = yearEntries
+        .groupingBy { entry ->
+            YearMonth.from(LocalDate.ofEpochDay(entry.watchedDateEpochDay))
+        }
+        .eachCount()
+        .maxByOrNull { it.value }
+        ?.key
+        ?.format(DateTimeFormatter.ofPattern("MMMM"))
+        ?: "—"
+    val rewatches = yearEntries.filter { entry -> entry.isRewatch }
+    val mostRewatchedTitle = rewatches
+        .groupingBy { entry -> entry.item.title }
+        .eachCount()
+        .maxByOrNull { it.value }
+        ?.let { (title, count) -> "$title • $count" }
+    val topGenres = yearEntries
+        .flatMap { entry -> entry.item.genres.distinct() }
+        .groupingBy { genre -> genre }
+        .eachCount()
+        .toList()
+        .sortedWith(
+            compareByDescending<Pair<String, Int>> { pair -> pair.second }
+                .thenBy { pair -> pair.first }
+        )
+        .take(5)
+
+    return AdvancedYearSummary(
+        year = year,
+        totalEntries = yearEntries.size,
+        movieWatches = yearEntries.count { it.item.mediaType == "movie" },
+        episodeWatches = yearEntries.count { it.item.mediaType == "tv" },
+        totalMinutes = totalMinutes,
+        activeDays = activeDays,
+        averageMinutesPerActiveDay = if (activeDays > 0) {
+            totalMinutes / activeDays
+        } else {
+            0
+        },
+        favoriteDay = favoriteDay,
+        busiestMonth = busiestMonth,
+        rewatchCount = rewatches.size,
+        rewatchRate = if (yearEntries.isNotEmpty()) {
+            (rewatches.size * 100f / yearEntries.size).toInt()
+        } else {
+            0
+        },
+        mostRewatchedTitle = mostRewatchedTitle,
+        topGenres = topGenres
+    )
+}
+
+@Composable
+private fun StatisticsYearSelector(
+    years: List<Int>,
+    selectedYear: Int,
+    onYearSelected: (Int) -> Unit
+) {
+    val index = years.indexOf(selectedYear).coerceAtLeast(0)
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = ScreenSurface)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Button(
+                onClick = { onYearSelected(years[index - 1]) },
+                enabled = index > 0,
+                modifier = Modifier.size(42.dp),
+                contentPadding = PaddingValues(0.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = ScreenSurfaceLight)
+            ) { Text("‹", fontSize = 22.sp) }
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = selectedYear.toString(),
+                    color = ScreenTextPrimary,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Year in review",
+                    color = ScreenTextSecondary,
+                    fontSize = 10.sp
+                )
+            }
+            Button(
+                onClick = { onYearSelected(years[index + 1]) },
+                enabled = index < years.lastIndex,
+                modifier = Modifier.size(42.dp),
+                contentPadding = PaddingValues(0.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = ScreenSurfaceLight)
+            ) { Text("›", fontSize = 22.sp) }
+        }
+    }
+}
+
+@Composable
+private fun AnnualSummaryCard(summary: AdvancedYearSummary) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = ScreenSurface)
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text(
+                text = "${summary.year} summary",
+                color = ScreenTextPrimary,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                AnnualMetric(
+                    modifier = Modifier.weight(1f),
+                    value = summary.movieWatches.toString(),
+                    label = "Movies"
+                )
+                AnnualMetric(
+                    modifier = Modifier.weight(1f),
+                    value = summary.episodeWatches.toString(),
+                    label = "Episodes"
+                )
+                AnnualMetric(
+                    modifier = Modifier.weight(1f),
+                    value = formatWatchTime(summary.totalMinutes),
+                    label = "Watch time"
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AnnualMetric(
+    modifier: Modifier,
+    value: String,
+    label: String
+) {
+    Column(
+        modifier = modifier
+            .background(ScreenSurfaceLight, RoundedCornerShape(13.dp))
+            .padding(horizontal = 6.dp, vertical = 14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = value,
+            color = ScreenTextPrimary,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(text = label, color = ScreenTextSecondary, fontSize = 9.sp)
+    }
+}
+
+@Composable
+private fun ViewingPatternsCard(summary: AdvancedYearSummary) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = ScreenSurface)
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text(
+                text = "Viewing patterns",
+                color = ScreenTextPrimary,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            StatisticsInformationRow("Favorite viewing day", summary.favoriteDay)
+            StatisticsInformationRow("Busiest month", summary.busiestMonth)
+            StatisticsInformationRow("Active watch days", summary.activeDays.toString())
+            StatisticsInformationRow(
+                "Average per active day",
+                formatWatchTime(summary.averageMinutesPerActiveDay)
+            )
+        }
+    }
+}
+
+@Composable
+private fun StatisticsInformationRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.weight(1f),
+            color = ScreenTextSecondary,
+            fontSize = 12.sp
+        )
+        Text(
+            text = value,
+            color = ScreenTextPrimary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+@Composable
+private fun TopGenresCard(genres: List<Pair<String, Int>>) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = ScreenSurface)
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text(
+                text = "Top genres",
+                color = ScreenTextPrimary,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "Ranked by watch entries in the selected year",
+                color = ScreenTextSecondary,
+                fontSize = 10.sp
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+
+            if (genres.isEmpty()) {
+                Text(
+                    text = "Genre information is being updated from TMDB.",
+                    color = ScreenTextSecondary,
+                    fontSize = 12.sp
+                )
+            } else {
+                val maximum = genres.maxOf { pair -> pair.second }.coerceAtLeast(1)
+                genres.forEachIndexed { index, (genre, count) ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "${index + 1}",
+                            modifier = Modifier.width(24.dp),
+                            color = ScreenPrimary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row {
+                                Text(
+                                    text = genre,
+                                    modifier = Modifier.weight(1f),
+                                    color = ScreenTextPrimary,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = count.toString(),
+                                    color = ScreenTextSecondary,
+                                    fontSize = 11.sp
+                                )
+                            }
+                            LinearProgressIndicator(
+                                progress = {
+                                    count.toFloat() / maximum.toFloat()
+                                },
+                                modifier = Modifier.fillMaxWidth().height(5.dp),
+                                color = ScreenPrimary,
+                                trackColor = ScreenSurfaceLight
+                            )
+                        }
+                    }
+                    if (index < genres.lastIndex) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RewatchInsightsCard(summary: AdvancedYearSummary) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = ScreenSurface)
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text(
+                text = "Rewatch insights",
+                color = ScreenTextPrimary,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            StatisticsInformationRow("Rewatches", summary.rewatchCount.toString())
+            StatisticsInformationRow("Share of watch history", "${summary.rewatchRate}%")
+            StatisticsInformationRow(
+                "Most rewatched",
+                summary.mostRewatchedTitle ?: "—"
+            )
+        }
     }
 }
 
