@@ -291,7 +291,7 @@ class SearchViewModel(
         status: LibraryStatus,
         watchDateEpochDay: Long?,
         personalRating: Double?,
-        notes: String,
+        watchMethod: String?,
         selectedEpisode: TmdbEpisode?
     ) {
         if (uiState.value.isSaving) {
@@ -322,7 +322,7 @@ class SearchViewModel(
                     status = status,
                     watchDateEpochDay = watchDateEpochDay,
                     personalRating = personalRating,
-                    notes = notes,
+                    watchMethod = watchMethod,
                     currentSeason =
                         selectedEpisode?.seasonNumber,
                     currentEpisode =
