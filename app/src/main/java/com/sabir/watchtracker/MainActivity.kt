@@ -1,4 +1,4 @@
-package com.sabir.watchtracker
+﻿package com.sabir.watchtracker
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -72,6 +72,7 @@ private fun WatchTrackerApp(
     libraryViewModel: LibraryViewModel = viewModel()
 ) {
     val libraryUiState by libraryViewModel.uiState
+    val backupUiState by libraryViewModel.backupUiState
 
     var selectedTab by remember {
         mutableIntStateOf(0)
@@ -241,6 +242,14 @@ private fun WatchTrackerApp(
                         StatisticsScreen(
                             paddingValues = innerPadding,
                             libraryUiState = libraryUiState,
+                            backupUiState = backupUiState,
+                            onExportBackup = libraryViewModel::exportBackup,
+                            onInspectBackup = libraryViewModel::inspectBackup,
+                            onRestoreBackup = libraryViewModel::restoreBackup,
+                            onDismissBackupPreview =
+                                libraryViewModel::dismissBackupPreview,
+                            onClearBackupMessage =
+                                libraryViewModel::clearBackupMessage,
                             onBackClick = { selectedTab = 0 }
                         )
                     }
