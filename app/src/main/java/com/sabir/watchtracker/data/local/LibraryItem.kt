@@ -30,6 +30,8 @@ data class LibraryItem(
     val runtimeMinutes: Int?,
     val genreNames: String? = null,
     val watchMethod: String? = null,
+    val originalTitle: String? = null,
+    val originalLanguage: String? = null,
     val addedAt: Long,
     val updatedAt: Long
 ) {
