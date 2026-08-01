@@ -2,6 +2,7 @@ package com.sabir.watchtracker.data.remote
 
 import com.google.gson.annotations.SerializedName
 import com.sabir.watchtracker.BuildConfig
+import java.util.Locale
 
 data class TmdbMovieDetails(
     @SerializedName("id")
@@ -55,6 +56,9 @@ data class TmdbSearchResult(
     @SerializedName("original_name")
     val originalShowTitle: String? = null,
 
+    @SerializedName("original_language")
+    val originalLanguage: String? = null,
+
     @SerializedName("overview")
     val overview: String = "",
 
@@ -82,6 +86,34 @@ data class TmdbSearchResult(
             ?: originalMovieTitle
             ?: originalShowTitle
             ?: "Untitled"
+
+    val originalTitle: String?
+        get() = (originalMovieTitle ?: originalShowTitle)
+            ?.trim()
+            ?.takeIf { title ->
+                title.isNotBlank() &&
+                    !title.equals(displayTitle, ignoreCase = true)
+            }
+
+    val displayLanguage: String
+        get() {
+            val code = originalLanguage
+                ?.trim()
+                ?.lowercase()
+                ?.takeIf { it.isNotBlank() }
+                ?: return "Unknown language"
+
+            return Locale.forLanguageTag(code)
+                .getDisplayLanguage(Locale.ENGLISH)
+                .takeIf { name ->
+                    name.isNotBlank() &&
+                        !name.equals(code, ignoreCase = true)
+                }
+                ?.replaceFirstChar { character ->
+                    character.titlecase(Locale.ENGLISH)
+                }
+                ?: code.uppercase(Locale.ENGLISH)
+        }
 
     val displayDate: String
         get() = movieReleaseDate
