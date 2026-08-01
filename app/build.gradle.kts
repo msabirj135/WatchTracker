@@ -10,10 +10,16 @@ val localProperties = Properties().apply {
     }
 }
 
-val tmdbAccessToken = localProperties.getProperty(
-    "TMDB_ACCESS_TOKEN",
-    ""
-)
+val tmdbProxyBaseUrl = localProperties
+    .getProperty("TMDB_PROXY_BASE_URL", "")
+    .trim()
+    .trimEnd('/')
+    .takeIf { it.isNotBlank() }
+    ?: "https://watchtracker-proxy-not-configured.invalid"
+
+val watchTrackerAppKey = localProperties
+    .getProperty("WATCHTRACKER_APP_KEY", "")
+    .trim()
 
 plugins {
     alias(libs.plugins.android.application)
@@ -36,8 +42,14 @@ android {
 
         buildConfigField(
             type = "String",
-            name = "TMDB_ACCESS_TOKEN",
-            value = "\"$tmdbAccessToken\""
+            name = "TMDB_PROXY_BASE_URL",
+            value = "\"$tmdbProxyBaseUrl\""
+        )
+
+        buildConfigField(
+            type = "String",
+            name = "WATCHTRACKER_APP_KEY",
+            value = "\"$watchTrackerAppKey\""
         )
     }
 
