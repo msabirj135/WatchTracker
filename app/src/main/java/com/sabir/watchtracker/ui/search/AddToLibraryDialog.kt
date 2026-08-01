@@ -211,17 +211,46 @@ fun AddToLibraryDialog(
                     Spacer(modifier = Modifier.height(4.dp))
 
                     Text(
-                        text = buildString {
-                            append(result.displayMediaType)
-
-                            if (result.displayYear != "—") {
-                                append(" • ")
-                                append(result.displayYear)
-                            }
-                        },
+                        text = "Title information",
                         color = DialogTextSecondary,
-                        fontSize = 13.sp
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
                     )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = DialogSurfaceLight,
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(
+                                horizontal = 14.dp,
+                                vertical = 12.dp
+                            )
+                        ) {
+                            result.originalTitle?.let { originalTitle ->
+                                DialogMetadataRow(
+                                    label = "Original title",
+                                    value = originalTitle
+                                )
+                            }
+
+                            DialogMetadataRow(
+                                label = "Type",
+                                value = result.displayMediaType
+                            )
+                            DialogMetadataRow(
+                                label = "Release year",
+                                value = result.displayYear
+                            )
+                            DialogMetadataRow(
+                                label = "Language",
+                                value = result.displayLanguage
+                            )
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(24.dp))
 
@@ -497,6 +526,35 @@ fun AddToLibraryDialog(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun DialogMetadataRow(
+    label: String,
+    value: String
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 3.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.width(94.dp),
+            color = DialogTextSecondary,
+            fontSize = 11.sp
+        )
+        Text(
+            text = value,
+            modifier = Modifier.weight(1f),
+            color = DialogTextPrimary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
