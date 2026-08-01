@@ -114,6 +114,8 @@ fun LibraryItemDetailScreen(
             onDeleteClick = { showDeleteConfirmation = true },
             onUpdateWatchDate = detailViewModel::updateMovieWatchDate,
             onAddRewatch = detailViewModel::addMovieRewatch,
+            onUpdateWatchMethod = detailViewModel::updateMovieWatchMethod,
+            onUpdateRewatchMethod = detailViewModel::updateMovieRewatchMethod,
             onDeleteRewatch = detailViewModel::deleteRewatch,
             rewatchRecords = uiState.rewatchRecords,
             onRatingChange = detailViewModel::updatePersonalRating,
@@ -475,13 +477,17 @@ private fun MovieDetailScreen(
     onBackClick: () -> Unit,
     onDeleteClick: () -> Unit,
     onUpdateWatchDate: (Long?) -> Unit,
-    onAddRewatch: (Long) -> Unit,
+    onAddRewatch: (Long, String) -> Unit,
+    onUpdateWatchMethod: (String) -> Unit,
+    onUpdateRewatchMethod: (Long, String) -> Unit,
     onDeleteRewatch: (Long) -> Unit,
     rewatchRecords: List<RewatchRecord>,
     onRatingChange: (Double?) -> Unit,
     onClearError: () -> Unit
 ) {
     val context = LocalContext.current
+    var pendingRewatchDate by remember { mutableStateOf<Long?>(null) }
+    var editingRewatch by remember { mutableStateOf<RewatchRecord?>(null) }
 
     LazyColumn(
         modifier = Modifier
@@ -524,6 +530,16 @@ private fun MovieDetailScreen(
                 isSaving = isSaving,
                 onRatingChange = onRatingChange
             )
+        }
+
+        if (item.watchDateEpochDay != null) {
+            item {
+                MovieWatchMethodCard(
+                    watchMethod = item.watchMethod,
+                    isSaving = isSaving,
+                    onWatchMethodSelected = onUpdateWatchMethod
+                )
+            }
         }
 
         if (item.status == LibraryStatus.WATCHING) {
@@ -624,7 +640,9 @@ private fun MovieDetailScreen(
                                 showDatePicker(
                                     context = context,
                                     initialEpochDay = LocalDate.now().toEpochDay(),
-                                    onDateSelected = onAddRewatch
+                                    onDateSelected = { date ->
+                                        pendingRewatchDate = date
+                                    }
                                 )
                             },
                             modifier = Modifier.fillMaxWidth(),
@@ -653,12 +671,24 @@ private fun MovieDetailScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = formatDetailDate(record.watchedDateEpochDay),
-                                    modifier = Modifier.weight(1f),
-                                    color = DetailTextPrimary,
-                                    fontSize = 13.sp
-                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = formatDetailDate(record.watchedDateEpochDay),
+                                        color = DetailTextPrimary,
+                                        fontSize = 13.sp
+                                    )
+                                    Text(
+                                        text = formatMovieWatchMethod(record.watchMethod),
+                                        color = DetailTextSecondary,
+                                        fontSize = 10.sp
+                                    )
+                                }
+                                TextButton(
+                                    onClick = { editingRewatch = record },
+                                    enabled = !isSaving
+                                ) {
+                                    Text("Edit", color = DetailSuccess, fontSize = 11.sp)
+                                }
                                 TextButton(
                                     onClick = { onDeleteRewatch(record.id) },
                                     enabled = !isSaving
@@ -725,6 +755,30 @@ private fun MovieDetailScreen(
                 )
             }
         }
+    }
+
+    pendingRewatchDate?.let { date ->
+        MovieWatchMethodDialog(
+            title = "How did you rewatch it?",
+            currentMethod = null,
+            onDismiss = { pendingRewatchDate = null },
+            onSelected = { method ->
+                pendingRewatchDate = null
+                onAddRewatch(date, method)
+            }
+        )
+    }
+
+    editingRewatch?.let { record ->
+        MovieWatchMethodDialog(
+            title = "Change rewatch method",
+            currentMethod = record.watchMethod,
+            onDismiss = { editingRewatch = null },
+            onSelected = { method ->
+                editingRewatch = null
+                onUpdateRewatchMethod(record.id, method)
+            }
+        )
     }
 }
 
@@ -814,6 +868,101 @@ private fun RatingEditorCard(
             )
         }
     }
+}
+
+@Composable
+private fun MovieWatchMethodCard(
+    watchMethod: String?,
+    isSaving: Boolean,
+    onWatchMethodSelected: (String) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = DetailSurface)
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Text("Watched via", color = DetailTextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text(
+                if (watchMethod == null) "Choose a method for this watch." else formatMovieWatchMethod(watchMethod),
+                color = DetailTextSecondary,
+                fontSize = 11.sp
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                MovieWatchMethodButton(
+                    modifier = Modifier.weight(1f),
+                    label = "▶ OTT",
+                    selected = watchMethod == "OTT",
+                    enabled = !isSaving,
+                    onClick = { onWatchMethodSelected("OTT") }
+                )
+                MovieWatchMethodButton(
+                    modifier = Modifier.weight(1f),
+                    label = "🎟 Theatre",
+                    selected = watchMethod == "THEATRE",
+                    enabled = !isSaving,
+                    onClick = { onWatchMethodSelected("THEATRE") }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MovieWatchMethodButton(
+    modifier: Modifier,
+    label: String,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = if (selected) DetailPrimary.copy(alpha = 0.18f) else Color.Transparent,
+            contentColor = if (selected) DetailPrimary else DetailTextSecondary
+        ),
+        shape = RoundedCornerShape(13.dp)
+    ) {
+        Text(label, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
+    }
+}
+
+@Composable
+private fun MovieWatchMethodDialog(
+    title: String,
+    currentMethod: String?,
+    onDismiss: () -> Unit,
+    onSelected: (String) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title, fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                MovieWatchMethodButton(
+                    modifier = Modifier.fillMaxWidth(),
+                    label = "▶ OTT",
+                    selected = currentMethod == "OTT",
+                    enabled = true,
+                    onClick = { onSelected("OTT") }
+                )
+                MovieWatchMethodButton(
+                    modifier = Modifier.fillMaxWidth(),
+                    label = "🎟 Theatre",
+                    selected = currentMethod == "THEATRE",
+                    enabled = true,
+                    onClick = { onSelected("THEATRE") }
+                )
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        containerColor = DetailSurface
+    )
 }
 
 @Composable
@@ -921,7 +1070,7 @@ private fun buildMovieTimeline(
         DetailTimelineEntry(
             key = "movie-original-${item.tmdbId}",
             watchedDateEpochDay = epochDay,
-            label = "First watch",
+            label = "First watch • ${formatMovieWatchMethod(item.watchMethod)}",
             isRewatch = false
         )
     }
@@ -929,7 +1078,7 @@ private fun buildMovieTimeline(
         DetailTimelineEntry(
             key = "movie-rewatch-${record.id}",
             watchedDateEpochDay = record.watchedDateEpochDay,
-            label = "Rewatch",
+            label = "Rewatch • ${formatMovieWatchMethod(record.watchMethod)}",
             isRewatch = true
         )
     }).sortedByDescending { entry -> entry.watchedDateEpochDay }
@@ -1158,6 +1307,14 @@ private fun formatDetailRuntime(minutes: Int): String {
         hours == 0 -> "${remaining}m"
         remaining == 0 -> "${hours}h"
         else -> "${hours}h ${remaining}m"
+    }
+}
+
+private fun formatMovieWatchMethod(watchMethod: String?): String {
+    return when (watchMethod) {
+        "OTT" -> "OTT"
+        "THEATRE" -> "Theatre"
+        else -> "Not specified"
     }
 }
 
