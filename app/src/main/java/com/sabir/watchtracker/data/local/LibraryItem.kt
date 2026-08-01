@@ -29,6 +29,7 @@ data class LibraryItem(
     val totalEpisodes: Int?,
     val runtimeMinutes: Int?,
     val genreNames: String? = null,
+    val watchMethod: String? = null,
     val addedAt: Long,
     val updatedAt: Long
 ) {
