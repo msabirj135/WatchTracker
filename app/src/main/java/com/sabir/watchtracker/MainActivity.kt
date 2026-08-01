@@ -76,6 +76,7 @@ private fun WatchTrackerApp(
     val libraryUiState by libraryViewModel.uiState
     val backupUiState by libraryViewModel.backupUiState
     val upNextUiState by libraryViewModel.upNextUiState
+    val dataHealthUiState by libraryViewModel.dataHealthUiState
 
     var selectedTab by remember {
         mutableIntStateOf(0)
@@ -159,6 +160,7 @@ private fun WatchTrackerApp(
             SettingsScreen(
                 libraryUiState = libraryUiState,
                 backupUiState = backupUiState,
+                dataHealthUiState = dataHealthUiState,
                 onBackClick = {
                     settingsIsOpen = false
                 },
@@ -172,7 +174,9 @@ private fun WatchTrackerApp(
                     libraryViewModel::dismissBackupPreview,
                 onClearBackupMessage =
                     libraryViewModel::clearBackupMessage,
-                onClearAllData = libraryViewModel::clearAllData
+                onClearAllData = libraryViewModel::clearAllData,
+                onRunHealthCheck = libraryViewModel::runDataHealthCheck,
+                onRepairData = libraryViewModel::repairDataHealth
             )
         } else if (historyIsOpen) {
             HistoryScreen(
