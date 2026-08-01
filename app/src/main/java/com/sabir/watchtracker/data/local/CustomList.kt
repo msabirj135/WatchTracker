@@ -10,5 +10,7 @@ data class CustomList(
     val name: String,
     val description: String,
     val createdAt: Long,
-    val updatedAt: Long
+    val updatedAt: Long,
+    val colorKey: String? = null,
+    val iconKey: String? = null
 )
