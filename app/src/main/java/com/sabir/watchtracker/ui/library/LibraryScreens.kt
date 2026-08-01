@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -18,6 +19,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
@@ -78,7 +83,8 @@ fun HomeScreen(
 ) {
     val context = LocalContext.current
 
-    LazyColumn(
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(3),
         modifier = Modifier
             .fillMaxSize()
             .background(ScreenBackground)
@@ -1185,10 +1191,10 @@ fun LibraryScreen(
             end = 20.dp,
             bottom = 28.dp
         ),
-        verticalArrangement =
-            Arrangement.spacedBy(14.dp)
+        horizontalArrangement = Arrangement.spacedBy(9.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        item {
+        item(span = { GridItemSpan(maxLineSpan) }) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment =
@@ -1242,13 +1248,13 @@ fun LibraryScreen(
 
         when {
             isLoading -> {
-                item {
+                item(span = { GridItemSpan(maxLineSpan) }) {
                     LoadingBlock()
                 }
             }
 
             items.isEmpty() -> {
-                item {
+                item(span = { GridItemSpan(maxLineSpan) }) {
                     EmptyLibraryCard(
                         title = title,
                         onAddClick = onAddClick
@@ -1257,13 +1263,13 @@ fun LibraryScreen(
             }
 
             else -> {
-                items(
+                gridItems(
                     items = items,
                     key = { item ->
                         "${item.mediaType}-${item.tmdbId}"
                     }
                 ) { item ->
-                    LibraryItemCard(
+                    LibraryGridCard(
                         item = item,
                         onClick = {
                             onItemClick(item)
@@ -1276,132 +1282,85 @@ fun LibraryScreen(
 }
 
 @Composable
-private fun LibraryItemCard(
+private fun LibraryGridCard(
     item: LibraryItem,
     onClick: () -> Unit
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
         onClick = onClick,
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
             containerColor = ScreenSurface
         )
     ) {
-        Row(
-            modifier = Modifier.padding(12.dp)
-        ) {
+        Column {
             LibraryPoster(
                 item = item,
                 modifier = Modifier
-                    .width(92.dp)
-                    .height(156.dp)
+                    .fillMaxWidth()
+                    .aspectRatio(2f / 3f)
             )
-
-            Spacer(
-                modifier = Modifier.width(14.dp)
-            )
-
             Column(
                 modifier = Modifier
-                    .weight(1f)
-                    .height(156.dp)
+                    .fillMaxWidth()
+                    .height(112.dp)
+                    .padding(9.dp)
             ) {
                 Text(
                     text = item.title,
+                    modifier = Modifier.height(29.dp),
                     color = ScreenTextPrimary,
-                    fontSize = 17.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = 13.sp
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = if (item.mediaType == "tv") {
+                        item.episodeProgressText ?: item.status.displayName
+                    } else {
+                        item.status.displayName
+                    },
+                    color = when (item.status) {
+                        LibraryStatus.COMPLETED -> ScreenSuccess
+                        LibraryStatus.WATCHING -> ScreenWarning
+                        else -> ScreenPrimary
+                    },
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-
-                Spacer(
-                    modifier = Modifier.height(7.dp)
-                )
-
-                Row(
-                    verticalAlignment =
-                        Alignment.CenterVertically
-                ) {
-                    StatusBadge(item.status)
-
-                    Spacer(
-                        modifier = Modifier.width(8.dp)
-                    )
-
-                    Text(
-                        text = item.displayYear,
-                        color = ScreenTextSecondary,
-                        fontSize = 12.sp
-                    )
-                }
-
-                Spacer(
-                    modifier = Modifier.height(10.dp)
-                )
-
-                if (item.watchDateEpochDay != null) {
-                    Text(
-                        text = if (item.mediaType == "tv") {
-                            "Last watched: ${
-                                formatEpochDay(
-                                    item.watchDateEpochDay
-                                )
-                            }"
+                Spacer(modifier = Modifier.height(5.dp))
+                Text(
+                    text = item.watchDateEpochDay?.let { date ->
+                        if (item.mediaType == "tv") {
+                            "Last: ${formatCompactEpochDay(date)}"
                         } else {
-                            "Watched: ${
-                            formatEpochDay(
-                                item.watchDateEpochDay
-                            )
-                        }"
-                        },
-                        color = ScreenTextSecondary,
-                        fontSize = 12.sp
-                    )
-
-                    Spacer(
-                        modifier = Modifier.height(5.dp)
-                    )
-                }
-
-                if (item.personalRating != null) {
-                    Text(
-                        text = "Your rating: ★ ${
-                            formatRating(
-                                item.personalRating
-                            )
-                        }",
-                        color = ScreenWarning,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-
-                if (item.mediaType == "tv") {
-                    val progressText = buildString {
-                        append(
-                            item.episodeProgressText
-                                ?: "Not started"
-                        )
-
-                        if (
-                            item.totalEpisodes != null &&
-                            item.totalEpisodes > 0
-                        ) {
-                            append(" • ")
-                            append(item.totalEpisodes)
-                            append(" episodes")
+                            "${formatCompactEpochDay(date)} • ${item.displayYear}"
                         }
-                    }
-
-                    Text(
-                        text = progressText,
-                        color = ScreenPrimary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
+                    } ?: item.displayYear,
+                    color = ScreenTextSecondary,
+                    fontSize = 8.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(5.dp))
+                Text(
+                    text = item.personalRating?.let { rating ->
+                        "★ ${formatRating(rating)}"
+                    } ?: if (item.mediaType == "tv" && item.totalEpisodes != null) {
+                        "${item.totalEpisodes} episodes"
+                    } else {
+                        "Not rated"
+                    },
+                    color = if (item.personalRating != null) ScreenWarning else ScreenTextSecondary,
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1
+                )
             }
         }
     }
@@ -2373,6 +2332,12 @@ private fun formatEpochDay(
                 "dd MMM yyyy"
             )
         )
+}
+
+private fun formatCompactEpochDay(epochDay: Long): String {
+    return LocalDate
+        .ofEpochDay(epochDay)
+        .format(DateTimeFormatter.ofPattern("dd MMM yy"))
 }
 
 private fun formatRating(
