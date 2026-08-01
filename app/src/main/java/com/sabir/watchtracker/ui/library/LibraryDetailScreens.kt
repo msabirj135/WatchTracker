@@ -49,6 +49,7 @@ import coil3.compose.AsyncImage
 import com.sabir.watchtracker.data.local.EpisodeWatch
 import com.sabir.watchtracker.data.local.LibraryItem
 import com.sabir.watchtracker.data.local.LibraryStatus
+import com.sabir.watchtracker.data.local.RewatchRecord
 import com.sabir.watchtracker.data.remote.TmdbEpisode
 import com.sabir.watchtracker.data.remote.TmdbSeasonDetails
 import com.sabir.watchtracker.ui.components.StarRatingSelector
@@ -96,7 +97,9 @@ fun LibraryItemDetailScreen(
             onMarkSeriesCompleted = detailViewModel::markSeriesCompleted,
             onMarkSeasonWatched = detailViewModel::markSeasonWatched,
             onMarkEpisode = detailViewModel::markEpisodeWatched,
+            onAddEpisodeRewatch = detailViewModel::addEpisodeRewatch,
             onUnmarkEpisode = detailViewModel::unmarkEpisodeWatched,
+            onDeleteRewatch = detailViewModel::deleteRewatch,
             onRatingChange = detailViewModel::updatePersonalRating,
             onClearError = detailViewModel::clearError,
             onRetryLoad = detailViewModel::retryLoadTvDetails
@@ -109,6 +112,9 @@ fun LibraryItemDetailScreen(
             onBackClick = onBackClick,
             onDeleteClick = { showDeleteConfirmation = true },
             onUpdateWatchDate = detailViewModel::updateMovieWatchDate,
+            onAddRewatch = detailViewModel::addMovieRewatch,
+            onDeleteRewatch = detailViewModel::deleteRewatch,
+            rewatchRecords = uiState.rewatchRecords,
             onRatingChange = detailViewModel::updatePersonalRating,
             onClearError = detailViewModel::clearError
         )
@@ -154,7 +160,9 @@ private fun TvShowDetailScreen(
     onMarkSeriesCompleted: () -> Unit,
     onMarkSeasonWatched: (TmdbSeasonDetails, Long) -> Unit,
     onMarkEpisode: (TmdbEpisode, Long) -> Unit,
+    onAddEpisodeRewatch: (TmdbEpisode, Long) -> Unit,
     onUnmarkEpisode: (TmdbEpisode) -> Unit,
+    onDeleteRewatch: (Long) -> Unit,
     onRatingChange: (Double?) -> Unit,
     onClearError: () -> Unit,
     onRetryLoad: () -> Unit
@@ -382,6 +390,10 @@ private fun TvShowDetailScreen(
             EditEpisodeDialog(
                 episode = episode,
                 episodeWatch = episodeWatch,
+                rewatchRecords = uiState.rewatchRecords.filter { record ->
+                    record.seasonNumber == episode.seasonNumber &&
+                        record.episodeNumber == episode.episodeNumber
+                },
                 isSaving = uiState.isSaving,
                 onDismiss = {
                     if (!uiState.isSaving) {
@@ -402,6 +414,17 @@ private fun TvShowDetailScreen(
                         }
                     )
                 },
+                onAddRewatch = {
+                    showDatePicker(
+                        context = context,
+                        initialEpochDay = LocalDate.now().toEpochDay(),
+                        onDateSelected = { epochDay ->
+                            onAddEpisodeRewatch(episode, epochDay)
+                            editingEpisode = null
+                        }
+                    )
+                },
+                onDeleteRewatch = onDeleteRewatch,
                 onMarkUnwatched = {
                     onUnmarkEpisode(episode)
                     editingEpisode = null
@@ -419,6 +442,9 @@ private fun MovieDetailScreen(
     onBackClick: () -> Unit,
     onDeleteClick: () -> Unit,
     onUpdateWatchDate: (Long?) -> Unit,
+    onAddRewatch: (Long) -> Unit,
+    onDeleteRewatch: (Long) -> Unit,
+    rewatchRecords: List<RewatchRecord>,
     onRatingChange: (Double?) -> Unit,
     onClearError: () -> Unit
 ) {
@@ -551,6 +577,62 @@ private fun MovieDetailScreen(
                     }
 
                     if (item.watchDateEpochDay != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        OutlinedButton(
+                            onClick = {
+                                showDatePicker(
+                                    context = context,
+                                    initialEpochDay = LocalDate.now().toEpochDay(),
+                                    onDateSelected = onAddRewatch
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !isSaving,
+                            shape = RoundedCornerShape(13.dp)
+                        ) {
+                            Text(
+                                text = "Add another watch",
+                                color = DetailSuccess,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    if (rewatchRecords.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Text(
+                            text = "Rewatches",
+                            color = DetailTextSecondary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        rewatchRecords.forEach { record ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = formatDetailDate(record.watchedDateEpochDay),
+                                    modifier = Modifier.weight(1f),
+                                    color = DetailTextPrimary,
+                                    fontSize = 13.sp
+                                )
+                                TextButton(
+                                    onClick = { onDeleteRewatch(record.id) },
+                                    enabled = !isSaving
+                                ) {
+                                    Text("Remove", color = DetailPrimary, fontSize = 11.sp)
+                                }
+                            }
+                        }
+                    }
+
+                    if (
+                        item.watchDateEpochDay != null &&
+                        rewatchRecords.isEmpty()
+                    ) {
                         Spacer(
                             modifier = Modifier.height(8.dp)
                         )
@@ -1081,9 +1163,12 @@ private fun EpisodeRow(
 private fun EditEpisodeDialog(
     episode: TmdbEpisode,
     episodeWatch: EpisodeWatch,
+    rewatchRecords: List<RewatchRecord>,
     isSaving: Boolean,
     onDismiss: () -> Unit,
     onChangeDate: () -> Unit,
+    onAddRewatch: () -> Unit,
+    onDeleteRewatch: (Long) -> Unit,
     onMarkUnwatched: () -> Unit
 ) {
     AlertDialog(
@@ -1100,6 +1185,39 @@ private fun EditEpisodeDialog(
                     text = episode.name,
                     fontWeight = FontWeight.SemiBold
                 )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                OutlinedButton(
+                    onClick = onAddRewatch,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isSaving
+                ) {
+                    Text(
+                        text = "Add another watch",
+                        color = DetailSuccess,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                rewatchRecords.forEach { record ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Rewatched ${formatDetailDate(record.watchedDateEpochDay)}",
+                            modifier = Modifier.weight(1f),
+                            fontSize = 12.sp
+                        )
+                        TextButton(
+                            onClick = { onDeleteRewatch(record.id) },
+                            enabled = !isSaving
+                        ) {
+                            Text("Remove", color = DetailPrimary, fontSize = 10.sp)
+                        }
+                    }
+                }
 
                 Spacer(
                     modifier = Modifier.height(8.dp)
@@ -1126,10 +1244,14 @@ private fun EditEpisodeDialog(
             Row {
                 TextButton(
                     onClick = onMarkUnwatched,
-                    enabled = !isSaving
+                    enabled = !isSaving && rewatchRecords.isEmpty()
                 ) {
                     Text(
-                        text = "Mark unwatched",
+                        text = if (rewatchRecords.isEmpty()) {
+                            "Mark unwatched"
+                        } else {
+                            "Remove rewatches first"
+                        },
                         color = DetailPrimary
                     )
                 }
