@@ -1,4 +1,4 @@
-package com.sabir.watchtracker.ui.library
+﻿package com.sabir.watchtracker.ui.library
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -208,7 +208,7 @@ private fun HomeHeader(
             modifier = Modifier.weight(1f)
         ) {
             Text(
-                text = "WATCHTRACKER",
+                text = "REELTICK",
                 color = ScreenPrimary,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.ExtraBold,
