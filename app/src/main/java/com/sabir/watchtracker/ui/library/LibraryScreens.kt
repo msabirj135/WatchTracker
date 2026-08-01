@@ -1,5 +1,8 @@
 ﻿package com.sabir.watchtracker.ui.library
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -26,6 +30,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,6 +43,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.sabir.watchtracker.data.backup.BackupImportMode
 import com.sabir.watchtracker.data.local.LibraryItem
 import com.sabir.watchtracker.data.local.LibraryStatus
 import java.time.LocalDate
@@ -1147,8 +1153,28 @@ private fun EmptyLibraryCard(
 fun StatisticsScreen(
     paddingValues: PaddingValues,
     libraryUiState: LibraryUiState,
+    backupUiState: BackupUiState,
+    onExportBackup: (Uri) -> Unit,
+    onInspectBackup: (Uri) -> Unit,
+    onRestoreBackup: (BackupImportMode) -> Unit,
+    onDismissBackupPreview: () -> Unit,
+    onClearBackupMessage: () -> Unit,
     onBackClick: () -> Unit
 ) {
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument(
+            "application/json"
+        )
+    ) { uri ->
+        uri?.let(onExportBackup)
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let(onInspectBackup)
+    }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -1194,6 +1220,26 @@ fun StatisticsScreen(
         }
 
         item { WatchTimeHeroCard(libraryUiState) }
+
+        item {
+            BackupAndRestoreCard(
+                isWorking = backupUiState.isWorking,
+                onExportClick = {
+                    exportLauncher.launch(
+                        "ReelTick-backup-${LocalDate.now()}.json"
+                    )
+                },
+                onImportClick = {
+                    importLauncher.launch(
+                        arrayOf(
+                            "application/json",
+                            "text/plain",
+                            "application/octet-stream"
+                        )
+                    )
+                }
+            )
+        }
 
         item {
             Row(
@@ -1242,6 +1288,229 @@ fun StatisticsScreen(
 
         item { WatchTimeSplitCard(libraryUiState) }
         item { StatusDistributionCard(libraryUiState) }
+    }
+
+    backupUiState.pendingPreview?.let { preview ->
+        AlertDialog(
+            onDismissRequest = onDismissBackupPreview,
+            containerColor = ScreenSurface,
+            titleContentColor = ScreenTextPrimary,
+            textContentColor = ScreenTextSecondary,
+            title = {
+                Text(
+                    text = "Restore ReelTick backup?",
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = buildString {
+                            append(preview.titleCount)
+                            append(" titles • ")
+                            append(preview.episodeCount)
+                            append(" episodes • ")
+                            append(preview.customListCount)
+                            append(" lists")
+                        }
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text(
+                        text = "Merge keeps your current library and adds newer backup data. Replace deletes the current library first.",
+                        fontSize = 12.sp
+                    )
+                }
+            },
+            confirmButton = {
+                Row {
+                    TextButton(
+                        onClick = {
+                            onRestoreBackup(
+                                BackupImportMode.REPLACE
+                            )
+                        },
+                        enabled = !backupUiState.isWorking
+                    ) {
+                        Text(
+                            text = "Replace",
+                            color = ScreenPrimary
+                        )
+                    }
+
+                    TextButton(
+                        onClick = {
+                            onRestoreBackup(
+                                BackupImportMode.MERGE
+                            )
+                        },
+                        enabled = !backupUiState.isWorking
+                    ) {
+                        Text(
+                            text = "Merge",
+                            color = ScreenSuccess,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = onDismissBackupPreview,
+                    enabled = !backupUiState.isWorking
+                ) {
+                    Text(
+                        text = "Cancel",
+                        color = ScreenTextSecondary
+                    )
+                }
+            }
+        )
+    }
+
+    val feedbackMessage = backupUiState.successMessage
+        ?: backupUiState.errorMessage
+
+    if (feedbackMessage != null) {
+        AlertDialog(
+            onDismissRequest = onClearBackupMessage,
+            containerColor = ScreenSurface,
+            titleContentColor = ScreenTextPrimary,
+            textContentColor = ScreenTextSecondary,
+            title = {
+                Text(
+                    text = if (
+                        backupUiState.errorMessage == null
+                    ) {
+                        "Backup complete"
+                    } else {
+                        "Backup failed"
+                    },
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(feedbackMessage)
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = onClearBackupMessage
+                ) {
+                    Text(
+                        text = "OK",
+                        color = ScreenPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun BackupAndRestoreCard(
+    isWorking: Boolean,
+    onExportClick: () -> Unit,
+    onImportClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = ScreenSurface
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .background(
+                            color = ScreenPrimary.copy(alpha = 0.14f),
+                            shape = RoundedCornerShape(14.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isWorking) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = ScreenPrimary,
+                            strokeWidth = 3.dp
+                        )
+                    } else {
+                        Text(
+                            text = "↕",
+                            color = ScreenPrimary,
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(13.dp))
+
+                Column {
+                    Text(
+                        text = "Backup & restore",
+                        color = ScreenTextPrimary,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = if (isWorking) {
+                            "Working on your backup…"
+                        } else {
+                            "Protect titles, episodes and lists"
+                        },
+                        color = ScreenTextSecondary,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(17.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Button(
+                    onClick = onExportClick,
+                    modifier = Modifier.weight(1f),
+                    enabled = !isWorking,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = ScreenPrimary
+                    ),
+                    shape = RoundedCornerShape(13.dp)
+                ) {
+                    Text(
+                        text = "Export",
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Button(
+                    onClick = onImportClick,
+                    modifier = Modifier.weight(1f),
+                    enabled = !isWorking,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = ScreenSurfaceLight
+                    ),
+                    shape = RoundedCornerShape(13.dp)
+                ) {
+                    Text(
+                        text = "Import",
+                        color = ScreenTextPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
     }
 }
 
