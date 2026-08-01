@@ -6,6 +6,7 @@ import com.sabir.watchtracker.data.local.CustomList
 import com.sabir.watchtracker.data.local.CustomListItem
 import com.sabir.watchtracker.data.local.LibraryItem
 import com.sabir.watchtracker.data.local.LibraryStatus
+import com.sabir.watchtracker.data.local.RewatchRecord
 import com.sabir.watchtracker.data.local.WatchTrackerDatabase
 import com.sabir.watchtracker.data.remote.TmdbEpisode
 import com.sabir.watchtracker.data.remote.TmdbSearchResult
@@ -24,6 +25,8 @@ class LibraryRepository(
         database.episodeWatchDao()
 
     private val customListDao = database.customListDao()
+
+    private val rewatchRecordDao = database.rewatchRecordDao()
 
     fun observeCustomLists(): Flow<List<CustomList>> =
         customListDao.observeLists()
@@ -83,6 +86,20 @@ class LibraryRepository(
 
     fun observeAllEpisodeWatches(): Flow<List<EpisodeWatch>> {
         return episodeWatchDao.observeAll()
+    }
+
+    fun observeAllRewatches(): Flow<List<RewatchRecord>> {
+        return rewatchRecordDao.observeAll()
+    }
+
+    fun observeRewatches(
+        tmdbId: Int,
+        mediaType: String
+    ): Flow<List<RewatchRecord>> {
+        return rewatchRecordDao.observeForTitle(
+            tmdbId = tmdbId,
+            mediaType = mediaType
+        )
     }
 
     fun observeMovies(): Flow<List<LibraryItem>> {
@@ -471,6 +488,62 @@ class LibraryRepository(
         )
     }
 
+    suspend fun addMovieRewatch(
+        movie: LibraryItem,
+        watchedDateEpochDay: Long
+    ) {
+        if (movie.mediaType != "movie") return
+
+        rewatchRecordDao.insert(
+            RewatchRecord(
+                tmdbId = movie.tmdbId,
+                mediaType = "movie",
+                seasonNumber = null,
+                episodeNumber = null,
+                episodeName = "",
+                watchedDateEpochDay = watchedDateEpochDay,
+                runtimeMinutes = movie.runtimeMinutes,
+                createdAt = System.currentTimeMillis()
+            )
+        )
+
+        libraryItemDao.upsert(
+            movie.copy(
+                status = LibraryStatus.COMPLETED,
+                updatedAt = System.currentTimeMillis()
+            )
+        )
+    }
+
+    suspend fun addEpisodeRewatch(
+        show: LibraryItem,
+        episode: TmdbEpisode,
+        watchedDateEpochDay: Long
+    ) {
+        if (show.mediaType != "tv") return
+
+        rewatchRecordDao.insert(
+            RewatchRecord(
+                tmdbId = show.tmdbId,
+                mediaType = "tv",
+                seasonNumber = episode.seasonNumber,
+                episodeNumber = episode.episodeNumber,
+                episodeName = episode.name,
+                watchedDateEpochDay = watchedDateEpochDay,
+                runtimeMinutes = episode.runtime,
+                createdAt = System.currentTimeMillis()
+            )
+        )
+
+        libraryItemDao.upsert(
+            show.copy(updatedAt = System.currentTimeMillis())
+        )
+    }
+
+    suspend fun deleteRewatch(recordId: Long) {
+        rewatchRecordDao.deleteById(recordId)
+    }
+
     suspend fun deleteItem(
         item: LibraryItem
     ) {
@@ -481,6 +554,11 @@ class LibraryRepository(
         }
 
         customListDao.removeTitleFromAllLists(
+            tmdbId = item.tmdbId,
+            mediaType = item.mediaType
+        )
+
+        rewatchRecordDao.deleteForTitle(
             tmdbId = item.tmdbId,
             mediaType = item.mediaType
         )
@@ -499,6 +577,11 @@ class LibraryRepository(
         }
 
         customListDao.removeTitleFromAllLists(
+            tmdbId = tmdbId,
+            mediaType = mediaType
+        )
+
+        rewatchRecordDao.deleteForTitle(
             tmdbId = tmdbId,
             mediaType = mediaType
         )
