@@ -1401,6 +1401,17 @@ fun StatisticsScreen(
             }
         }
 
+        if (libraryUiState.rewatchCount > 0) {
+            item {
+                CompactStatisticCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    value = libraryUiState.rewatchCount.toString(),
+                    label = "Rewatches logged",
+                    symbol = "↻"
+                )
+            }
+        }
+
         item { LongestStreakCard(libraryUiState.longestWatchStreak) }
         item { MonthlyWatchTimeCard(libraryUiState.monthlyWatchTimeTrend) }
 
