@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -22,6 +23,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -92,6 +94,11 @@ fun SearchScreen(
             onClear = searchViewModel::clearSearch
         )
 
+        SearchFilters(
+            selectedFilter = uiState.mediaFilter,
+            onFilterSelected = searchViewModel::updateMediaFilter
+        )
+
         SaveFeedback(
             successMessage = uiState.saveMessage,
             errorMessage = uiState.saveErrorMessage,
@@ -107,7 +114,9 @@ fun SearchScreen(
                 MessageContent(
                     symbol = "!",
                     title = "Search failed",
-                    message = uiState.errorMessage
+                    message = uiState.errorMessage,
+                    actionLabel = "Retry",
+                    onAction = searchViewModel::search
                 )
             }
 
@@ -120,21 +129,30 @@ fun SearchScreen(
             }
 
             uiState.results.isNotEmpty() -> {
-                SearchResults(
-                    results = uiState.results,
-                    onResultClick = { result ->
-                        searchViewModel.clearSaveFeedback()
-                        selectedResult = result
-                        searchViewModel.prepareResult(result)
-                    }
-                )
+                if (uiState.filteredResults.isEmpty()) {
+                    MessageContent(
+                        symbol = "⌕",
+                        title = "No ${uiState.mediaFilter.label.lowercase()} found",
+                        message = "Try the All filter or search another title."
+                    )
+                } else {
+                    SearchResults(
+                        results = uiState.filteredResults,
+                        savedItemKeys = uiState.savedItemKeys,
+                        onResultClick = { result ->
+                            searchViewModel.clearSaveFeedback()
+                            selectedResult = result
+                            searchViewModel.prepareResult(result)
+                        }
+                    )
+                }
             }
 
             else -> {
-                MessageContent(
-                    symbol = "⌕",
-                    title = "Search TMDB",
-                    message = "Find movies and TV shows to add to your personal tracker."
+                SearchLanding(
+                    recentSearches = uiState.recentSearches,
+                    onRecentSearch = searchViewModel::searchRecent,
+                    onClearRecent = searchViewModel::clearRecentSearches
                 )
             }
         }
@@ -179,6 +197,118 @@ fun SearchScreen(
                 )
             }
         )
+    }
+}
+
+@Composable
+private fun SearchFilters(
+    selectedFilter: SearchMediaFilter,
+    onFilterSelected: (SearchMediaFilter) -> Unit
+) {
+    LazyRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 10.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+            horizontal = 20.dp
+        ),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(SearchMediaFilter.entries) { filter ->
+            FilterChip(
+                selected = selectedFilter == filter,
+                onClick = { onFilterSelected(filter) },
+                label = {
+                    Text(
+                        text = filter.label,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun SearchLanding(
+    recentSearches: List<String>,
+    onRecentSearch: (String) -> Unit,
+    onClearRecent: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(top = 18.dp)
+    ) {
+        if (recentSearches.isNotEmpty()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Recent searches",
+                    modifier = Modifier.weight(1f),
+                    color = SearchTextPrimary,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                TextButton(onClick = onClearRecent) {
+                    Text(
+                        text = "Clear",
+                        color = SearchPrimary,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+
+            LazyRow(
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                    horizontal = 20.dp
+                ),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(recentSearches) { query ->
+                    FilterChip(
+                        selected = false,
+                        onClick = { onRecentSearch(query) },
+                        label = { Text(query) }
+                    )
+                }
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "⌕",
+                    color = SearchPrimary,
+                    fontSize = 48.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "Search TMDB",
+                    color = SearchTextPrimary,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Find movies and TV shows for your library.",
+                    color = SearchTextSecondary,
+                    fontSize = 13.sp
+                )
+            }
+        }
     }
 }
 
@@ -382,7 +512,9 @@ private fun LoadingContent() {
 private fun MessageContent(
     symbol: String,
     title: String,
-    message: String?
+    message: String?,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null
 ) {
     Box(
         modifier = Modifier
@@ -432,6 +564,21 @@ private fun MessageContent(
                 color = SearchTextSecondary,
                 fontSize = 14.sp
             )
+
+            if (actionLabel != null && onAction != null) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(
+                    onClick = onAction,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = SearchPrimary
+                    )
+                ) {
+                    Text(
+                        text = actionLabel,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         }
     }
 }
@@ -439,6 +586,7 @@ private fun MessageContent(
 @Composable
 private fun SearchResults(
     results: List<TmdbSearchResult>,
+    savedItemKeys: Set<String>,
     onResultClick: (TmdbSearchResult) -> Unit
 ) {
     LazyColumn(
@@ -468,6 +616,8 @@ private fun SearchResults(
         ) { result ->
             SearchResultCard(
                 result = result,
+                isSaved = "${result.mediaType}-${result.id}" in
+                    savedItemKeys,
                 onClick = {
                     onResultClick(result)
                 },
@@ -488,6 +638,7 @@ private fun SearchResults(
 @Composable
 private fun SearchResultCard(
     result: TmdbSearchResult,
+    isSaved: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -563,6 +714,19 @@ private fun SearchResultCard(
                                 fontWeight = FontWeight.SemiBold
                             )
                         }
+                    }
+
+                    if (isSaved) {
+                        Spacer(
+                            modifier = Modifier.height(7.dp)
+                        )
+
+                        Text(
+                            text = "✓ In your library",
+                            color = SearchSuccess,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
 
                     if (result.overview.isNotBlank()) {
