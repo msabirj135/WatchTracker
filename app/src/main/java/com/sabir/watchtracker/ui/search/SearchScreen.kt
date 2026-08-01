@@ -666,7 +666,7 @@ private fun SearchResultCard(
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .height(138.dp),
+                    .height(164.dp),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
                 Column {
@@ -678,6 +678,18 @@ private fun SearchResultCard(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
+
+                    result.originalTitle?.let { originalTitle ->
+                        Spacer(modifier = Modifier.height(3.dp))
+
+                        Text(
+                            text = originalTitle,
+                            color = SearchTextSecondary,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
 
                     Spacer(
                         modifier = Modifier.height(7.dp)
@@ -695,9 +707,12 @@ private fun SearchResultCard(
                         )
 
                         Text(
-                            text = result.displayYear,
+                            text = "${result.displayYear} • ${result.displayLanguage}",
+                            modifier = Modifier.weight(1f),
                             color = SearchTextSecondary,
-                            fontSize = 12.sp
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
 
                         if (result.voteAverage > 0.0) {
@@ -739,7 +754,7 @@ private fun SearchResultCard(
                             color = SearchTextSecondary,
                             fontSize = 12.sp,
                             lineHeight = 16.sp,
-                            maxLines = 3,
+                            maxLines = 2,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
@@ -756,7 +771,7 @@ private fun PosterImage(
     Box(
         modifier = Modifier
             .width(92.dp)
-            .height(138.dp)
+            .height(164.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(SearchSurfaceLight),
         contentAlignment = Alignment.Center
