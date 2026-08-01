@@ -1313,7 +1313,7 @@ private fun LibraryGridCard(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(124.dp)
+                    .height(136.dp)
                     .padding(9.dp)
             ) {
                 Text(
@@ -1382,7 +1382,8 @@ private fun LibraryGridCard(
                         color = if (item.personalRating != null) ScreenWarning else ScreenTextSecondary,
                         fontSize = 8.sp,
                         fontWeight = FontWeight.SemiBold,
-                        maxLines = 1
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
