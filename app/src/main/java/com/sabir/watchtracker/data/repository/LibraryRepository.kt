@@ -34,7 +34,12 @@ class LibraryRepository(
     fun observeCustomListItems(): Flow<List<CustomListItem>> =
         customListDao.observeItems()
 
-    suspend fun createCustomList(name: String, description: String) {
+    suspend fun createCustomList(
+        name: String,
+        description: String,
+        colorKey: String,
+        iconKey: String
+    ) {
         val normalizedName = name.trim()
         if (normalizedName.isBlank()) return
         val now = System.currentTimeMillis()
@@ -43,21 +48,53 @@ class LibraryRepository(
                 name = normalizedName,
                 description = description.trim(),
                 createdAt = now,
-                updatedAt = now
+                updatedAt = now,
+                colorKey = colorKey,
+                iconKey = iconKey
             )
         )
     }
 
-    suspend fun updateCustomList(list: CustomList, name: String, description: String) {
+    suspend fun updateCustomList(
+        list: CustomList,
+        name: String,
+        description: String,
+        colorKey: String,
+        iconKey: String
+    ) {
         val normalizedName = name.trim()
         if (normalizedName.isBlank()) return
         customListDao.upsertList(
             list.copy(
                 name = normalizedName,
                 description = description.trim(),
-                updatedAt = System.currentTimeMillis()
+                updatedAt = System.currentTimeMillis(),
+                colorKey = colorKey,
+                iconKey = iconKey
             )
         )
+    }
+
+    suspend fun duplicateCustomList(list: CustomList) {
+        val now = System.currentTimeMillis()
+        val newListId = customListDao.insertList(
+            list.copy(
+                id = 0,
+                name = "${list.name} copy",
+                createdAt = now,
+                updatedAt = now
+            )
+        )
+        customListDao.getItemsSnapshot()
+            .filter { item -> item.listId == list.id }
+            .forEachIndexed { index, item ->
+                customListDao.upsertItem(
+                    item.copy(
+                        listId = newListId,
+                        addedAt = now + index
+                    )
+                )
+            }
     }
 
     suspend fun addToCustomList(listId: Long, item: LibraryItem) {
