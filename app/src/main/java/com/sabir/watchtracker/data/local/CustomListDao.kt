@@ -52,4 +52,7 @@ interface CustomListDao {
 
     @Query("DELETE FROM custom_lists WHERE id = :listId")
     suspend fun deleteList(listId: Long)
+
+    @Query("DELETE FROM custom_list_items WHERE listId NOT IN (SELECT id FROM custom_lists) OR NOT EXISTS (SELECT 1 FROM library_items WHERE library_items.tmdbId = custom_list_items.tmdbId AND library_items.mediaType = custom_list_items.mediaType)")
+    suspend fun deleteOrphanItems(): Int
 }
