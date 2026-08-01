@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.sabir.watchtracker.data.local.LibraryItem
 import com.sabir.watchtracker.data.local.LibraryStatus
+import com.sabir.watchtracker.data.local.EpisodeWatch
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
@@ -1174,6 +1175,7 @@ fun LibraryScreen(
     paddingValues: PaddingValues,
     title: String,
     items: List<LibraryItem>,
+    episodeWatches: List<EpisodeWatch>,
     isLoading: Boolean,
     onBackClick: () -> Unit,
     onAddClick: () -> Unit,
@@ -1271,6 +1273,9 @@ fun LibraryScreen(
                 ) { item ->
                     LibraryGridCard(
                         item = item,
+                        episodeWatches = episodeWatches.filter { watch ->
+                            watch.tmdbShowId == item.tmdbId
+                        },
                         onClick = {
                             onItemClick(item)
                         }
@@ -1284,8 +1289,13 @@ fun LibraryScreen(
 @Composable
 private fun LibraryGridCard(
     item: LibraryItem,
+    episodeWatches: List<EpisodeWatch>,
     onClick: () -> Unit
 ) {
+    val watchedEpisodeCount = episodeWatches.size
+    val watchedEpisodeMinutes = episodeWatches.sumOf { watch ->
+        watch.runtimeMinutes ?: 0
+    }
     Card(
         onClick = onClick,
         shape = RoundedCornerShape(14.dp),
@@ -1319,14 +1329,18 @@ private fun LibraryGridCard(
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = if (item.mediaType == "tv") {
-                        item.episodeProgressText ?: item.status.displayName
+                        "$watchedEpisodeCount ${if (watchedEpisodeCount == 1) "episode" else "episodes"}"
                     } else {
                         item.status.displayName
                     },
-                    color = when (item.status) {
-                        LibraryStatus.COMPLETED -> ScreenSuccess
-                        LibraryStatus.WATCHING -> ScreenWarning
-                        else -> ScreenPrimary
+                    color = if (item.mediaType == "tv") {
+                        ScreenPrimary
+                    } else {
+                        when (item.status) {
+                            LibraryStatus.COMPLETED -> ScreenSuccess
+                            LibraryStatus.WATCHING -> ScreenWarning
+                            else -> ScreenPrimary
+                        }
                     },
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Bold,
@@ -1335,32 +1349,32 @@ private fun LibraryGridCard(
                 )
                 Spacer(modifier = Modifier.height(5.dp))
                 Text(
-                    text = item.watchDateEpochDay?.let { date ->
-                        if (item.mediaType == "tv") {
-                            "Last: ${formatCompactEpochDay(date)}"
-                        } else {
+                    text = if (item.mediaType == "tv") {
+                        val total = item.totalEpisodes?.takeIf { it > 0 }
+                            ?: watchedEpisodeCount
+                        "$watchedEpisodeCount/$total overall • ${formatWatchTime(watchedEpisodeMinutes)}"
+                    } else {
+                        item.watchDateEpochDay?.let { date ->
                             "${formatCompactEpochDay(date)} • ${item.displayYear}"
-                        }
-                    } ?: item.displayYear,
+                        } ?: item.displayYear
+                    },
                     color = ScreenTextSecondary,
                     fontSize = 8.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.height(5.dp))
-                Text(
-                    text = item.personalRating?.let { rating ->
-                        "★ ${formatRating(rating)}"
-                    } ?: if (item.mediaType == "tv" && item.totalEpisodes != null) {
-                        "${item.totalEpisodes} episodes"
-                    } else {
-                        "Not rated"
-                    },
-                    color = if (item.personalRating != null) ScreenWarning else ScreenTextSecondary,
-                    fontSize = 8.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1
-                )
+                if (item.mediaType != "tv") {
+                    Text(
+                        text = item.personalRating?.let { rating ->
+                            "★ ${formatRating(rating)}"
+                        } ?: "Not rated",
+                        color = if (item.personalRating != null) ScreenWarning else ScreenTextSecondary,
+                        fontSize = 8.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
+                    )
+                }
             }
         }
     }
