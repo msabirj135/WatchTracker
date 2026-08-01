@@ -126,6 +126,18 @@ data class MonthlyWatchTime(
     val minutes: Int
 )
 
+data class TheatreWatchEntry(
+    val item: LibraryItem,
+    val visitDates: List<Long>,
+    val totalMinutes: Int
+) {
+    val visitCount: Int
+        get() = visitDates.size
+
+    val latestVisitEpochDay: Long
+        get() = visitDates.maxOrNull() ?: Long.MIN_VALUE
+}
+
 data class LibraryUiState(
     val isLoading: Boolean = true,
     val items: List<LibraryItem> = emptyList(),
@@ -135,6 +147,35 @@ data class LibraryUiState(
     val customListItems: List<CustomListItem> = emptyList(),
     val errorMessage: String? = null
 ) {
+    val theatreWatchEntries: List<TheatreWatchEntry>
+        get() = movies.mapNotNull { movie ->
+            val dates = buildList {
+                if (movie.watchDateEpochDay != null && movie.watchMethod == "THEATRE") {
+                    add(movie.watchDateEpochDay)
+                }
+                addAll(
+                    rewatchRecords
+                        .filter { record ->
+                            record.mediaType == "movie" &&
+                                record.tmdbId == movie.tmdbId &&
+                                record.watchMethod == "THEATRE"
+                        }
+                        .map { record -> record.watchedDateEpochDay }
+                )
+            }
+            if (dates.isEmpty()) null else TheatreWatchEntry(
+                item = movie,
+                visitDates = dates.sortedDescending(),
+                totalMinutes = (movie.runtimeMinutes ?: 0) * dates.size
+            )
+        }.sortedByDescending { entry -> entry.latestVisitEpochDay }
+
+    val theatreVisitCount: Int
+        get() = theatreWatchEntries.sumOf { it.visitCount }
+
+    val theatreWatchMinutes: Int
+        get() = theatreWatchEntries.sumOf { it.totalMinutes }
+
     val movies: List<LibraryItem>
         get() = items
             .filter { item -> item.mediaType == "movie" }
