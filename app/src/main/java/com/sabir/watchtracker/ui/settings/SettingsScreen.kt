@@ -601,13 +601,29 @@ private fun ReleaseManagementCard() {
             }
         }
 
-        Text(
-            text = "A private, personal movie and TV tracker.",
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 10.dp),
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = "Developed by ",
+                color = SettingsTextSecondary,
+                fontSize = 12.sp
+            )
+            Text(
+                text = "Sabir",
+                color = SettingsPrimary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        Text(
+            text = "Made for tracking what matters",
+            modifier = Modifier.fillMaxWidth(),
             color = SettingsTextSecondary,
-            fontSize = 12.sp,
+            fontSize = 10.sp,
             textAlign = TextAlign.Center
         )
     }
