@@ -223,6 +223,13 @@ private fun TvShowDetailScreen(
         }
 
         item {
+            TitleMetadataCard(
+                item = item,
+                tvDetails = uiState.tvDetails
+            )
+        }
+
+        item {
             SeriesIntelligenceCard(
                 details = uiState.tvDetails,
                 availableEpisodeCount = uiState.availableEpisodeCount,
@@ -256,6 +263,20 @@ private fun TvShowDetailScreen(
                 isSaving = uiState.isSaving,
                 onMarkNextEpisode = onMarkNextEpisode
             )
+        }
+
+        if (
+            uiState.episodeWatches.isNotEmpty() ||
+            uiState.rewatchRecords.isNotEmpty()
+        ) {
+            item {
+                TitleViewingTimelineCard(
+                    entries = buildTvTimeline(
+                        episodeWatches = uiState.episodeWatches,
+                        rewatches = uiState.rewatchRecords
+                    )
+                )
+            }
         }
 
         if (
@@ -487,6 +508,13 @@ private fun MovieDetailScreen(
         }
 
         item {
+            TitleMetadataCard(
+                item = item,
+                tvDetails = null
+            )
+        }
+
+        item {
             RemoveFromLibraryButton(onClick = onDeleteClick)
         }
 
@@ -663,6 +691,20 @@ private fun MovieDetailScreen(
                         }
                     }
                 }
+            }
+        }
+
+        if (
+            item.watchDateEpochDay != null ||
+            rewatchRecords.isNotEmpty()
+        ) {
+            item {
+                TitleViewingTimelineCard(
+                    entries = buildMovieTimeline(
+                        item = item,
+                        rewatches = rewatchRecords
+                    )
+                )
             }
         }
 
@@ -861,6 +903,261 @@ private fun TitleOverviewCard(
                 }
             }
         }
+    }
+}
+
+private data class DetailTimelineEntry(
+    val key: String,
+    val watchedDateEpochDay: Long,
+    val label: String,
+    val isRewatch: Boolean
+)
+
+private fun buildMovieTimeline(
+    item: LibraryItem,
+    rewatches: List<RewatchRecord>
+): List<DetailTimelineEntry> {
+    val original = item.watchDateEpochDay?.let { epochDay ->
+        DetailTimelineEntry(
+            key = "movie-original-${item.tmdbId}",
+            watchedDateEpochDay = epochDay,
+            label = "First watch",
+            isRewatch = false
+        )
+    }
+    return (listOfNotNull(original) + rewatches.map { record ->
+        DetailTimelineEntry(
+            key = "movie-rewatch-${record.id}",
+            watchedDateEpochDay = record.watchedDateEpochDay,
+            label = "Rewatch",
+            isRewatch = true
+        )
+    }).sortedByDescending { entry -> entry.watchedDateEpochDay }
+}
+
+private fun buildTvTimeline(
+    episodeWatches: List<EpisodeWatch>,
+    rewatches: List<RewatchRecord>
+): List<DetailTimelineEntry> {
+    val originals = episodeWatches.map { watch ->
+        DetailTimelineEntry(
+            key = "episode-${watch.tmdbShowId}-${watch.seasonNumber}-${watch.episodeNumber}",
+            watchedDateEpochDay = watch.watchedDateEpochDay,
+            label = "${watch.episodeCode} • ${watch.episodeName}",
+            isRewatch = false
+        )
+    }
+    val repeatEntries = rewatches.map { record ->
+        DetailTimelineEntry(
+            key = "episode-rewatch-${record.id}",
+            watchedDateEpochDay = record.watchedDateEpochDay,
+            label = buildString {
+                append(record.episodeCode ?: "Episode")
+                if (record.episodeName.isNotBlank()) {
+                    append(" • ")
+                    append(record.episodeName)
+                }
+            },
+            isRewatch = true
+        )
+    }
+    return (originals + repeatEntries)
+        .sortedByDescending { entry -> entry.watchedDateEpochDay }
+}
+
+@Composable
+private fun TitleMetadataCard(
+    item: LibraryItem,
+    tvDetails: TmdbTvDetails?
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = DetailSurface)
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Text(
+                text = "Title information",
+                color = DetailTextPrimary,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+
+            DetailMetadataRow(
+                label = "Genres",
+                value = item.genres.takeIf { it.isNotEmpty() }
+                    ?.joinToString(" • ")
+                    ?: "Updating from TMDB…"
+            )
+            DetailMetadataRow(
+                label = if (item.mediaType == "movie") {
+                    "Release date"
+                } else {
+                    "First aired"
+                },
+                value = item.releaseDate.takeIf { it.isNotBlank() } ?: "—"
+            )
+
+            if (item.mediaType == "movie") {
+                DetailMetadataRow(
+                    label = "Runtime",
+                    value = item.runtimeMinutes?.let(::formatDetailRuntime)
+                        ?: "Updating from TMDB…"
+                )
+            } else {
+                DetailMetadataRow(
+                    label = "Seasons",
+                    value = (tvDetails?.numberOfSeasons ?: item.totalSeasons)
+                        ?.toString()
+                        ?: "—"
+                )
+                DetailMetadataRow(
+                    label = "Episodes",
+                    value = (tvDetails?.numberOfEpisodes ?: item.totalEpisodes)
+                        ?.toString()
+                        ?: "—"
+                )
+                tvDetails?.lastAirDate
+                    ?.takeIf { value -> value.isNotBlank() }
+                    ?.let { date ->
+                        DetailMetadataRow("Last aired", date)
+                    }
+            }
+
+            DetailMetadataRow(
+                label = "TMDB rating",
+                value = if (item.tmdbRating > 0.0) {
+                    "${String.format("%.1f", item.tmdbRating)} / 10"
+                } else {
+                    "—"
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun DetailMetadataRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.width(94.dp),
+            color = DetailTextSecondary,
+            fontSize = 11.sp
+        )
+        Text(
+            text = value,
+            modifier = Modifier.weight(1f),
+            color = DetailTextPrimary,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+@Composable
+private fun TitleViewingTimelineCard(
+    entries: List<DetailTimelineEntry>
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = DetailSurface)
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "Viewing timeline",
+                    modifier = Modifier.weight(1f),
+                    color = DetailTextPrimary,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "${entries.size} ${if (entries.size == 1) "entry" else "entries"}",
+                    color = DetailPrimary,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            entries.take(10).forEachIndexed { index, entry ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .background(
+                                color = if (entry.isRewatch) {
+                                    DetailWarning.copy(alpha = 0.15f)
+                                } else {
+                                    DetailSuccess.copy(alpha = 0.15f)
+                                },
+                                shape = RoundedCornerShape(9.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (entry.isRewatch) "↻" else "✓",
+                            color = if (entry.isRewatch) {
+                                DetailWarning
+                            } else {
+                                DetailSuccess
+                            },
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = entry.label,
+                            color = DetailTextPrimary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = formatDetailDate(entry.watchedDateEpochDay),
+                            color = DetailTextSecondary,
+                            fontSize = 10.sp
+                        )
+                    }
+                }
+                if (index < entries.take(10).lastIndex) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                }
+            }
+
+            if (entries.size > 10) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = "+ ${entries.size - 10} older entries available in Watch history",
+                    color = DetailTextSecondary,
+                    fontSize = 10.sp
+                )
+            }
+        }
+    }
+}
+
+private fun formatDetailRuntime(minutes: Int): String {
+    if (minutes <= 0) return "—"
+    val hours = minutes / 60
+    val remaining = minutes % 60
+    return when {
+        hours == 0 -> "${remaining}m"
+        remaining == 0 -> "${hours}h"
+        else -> "${hours}h ${remaining}m"
     }
 }
 
