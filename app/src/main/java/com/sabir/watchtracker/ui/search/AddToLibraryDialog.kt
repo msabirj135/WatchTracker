@@ -1,4 +1,4 @@
-package com.sabir.watchtracker.ui.search
+﻿package com.sabir.watchtracker.ui.search
 
 import android.app.DatePickerDialog
 import androidx.compose.foundation.background
@@ -22,8 +22,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -76,7 +74,7 @@ fun AddToLibraryDialog(
         status: LibraryStatus,
         watchDateEpochDay: Long?,
         personalRating: Double?,
-        notes: String,
+        watchMethod: String?,
         selectedEpisode: TmdbEpisode?
     ) -> Unit
 ) {
@@ -92,8 +90,8 @@ fun AddToLibraryDialog(
         mutableStateOf<Double?>(null)
     }
 
-    var notes by remember(result.id) {
-        mutableStateOf("")
+    var selectedWatchMethod by remember(result.id) {
+        mutableStateOf<String?>(null)
     }
 
     var selectedSeasonNumber by remember(result.id) {
@@ -128,6 +126,11 @@ fun AddToLibraryDialog(
     val dateSelectionIsValid =
         !dateIsRequired ||
             watchDateEpochDay != null
+
+    val watchMethodSelectionIsValid =
+        isTvShow ||
+            selectedStatus == LibraryStatus.PLAN_TO_WATCH ||
+            selectedWatchMethod != null
 
     LaunchedEffect(tvDetails?.id) {
         val firstSeason = tvDetails
@@ -236,6 +239,7 @@ fun AddToLibraryDialog(
                                     watchDateEpochDay = null
                                     personalRating = null
                                     selectedEpisodeNumber = 0
+                                    selectedWatchMethod = null
                                 }
 
                                 LibraryStatus.WATCHING -> {
@@ -389,35 +393,30 @@ fun AddToLibraryDialog(
                         onRatingChange = { personalRating = it },
                         enabled = !isSaving
                     )
-                    }
 
-                    Spacer(modifier = Modifier.height(18.dp))
-
-                    FormLabel("Notes")
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    OutlinedTextField(
-                        value = notes,
-                        onValueChange = { value ->
-                            if (value.length <= 500) {
-                                notes = value
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = {
-                            Text(
-                                "Optional thoughts or reminders"
+                    if (!isTvShow) {
+                        Spacer(modifier = Modifier.height(24.dp))
+                        FormLabel("Where did you watch it?")
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            WatchMethodOption(
+                                modifier = Modifier.weight(1f),
+                                label = "▶ OTT",
+                                selected = selectedWatchMethod == "OTT",
+                                onClick = { selectedWatchMethod = "OTT" }
                             )
-                        },
-                        minLines = 3,
-                        maxLines = 5,
-                        supportingText = {
-                            Text("${notes.length}/500")
-                        },
-                        shape = RoundedCornerShape(14.dp),
-                        colors = dialogTextFieldColors()
-                    )
+                            WatchMethodOption(
+                                modifier = Modifier.weight(1f),
+                                label = "🎟 Theatre",
+                                selected = selectedWatchMethod == "THEATRE",
+                                onClick = { selectedWatchMethod = "THEATRE" }
+                            )
+                        }
+                    }
+                    }
 
                     if (errorMessage != null) {
                         Spacer(modifier = Modifier.height(14.dp))
@@ -461,7 +460,7 @@ fun AddToLibraryDialog(
                                     selectedStatus,
                                     if (selectedStatus == LibraryStatus.PLAN_TO_WATCH) null else watchDateEpochDay,
                                     if (selectedStatus == LibraryStatus.PLAN_TO_WATCH) null else personalRating,
-                                    notes,
+                                    if (selectedStatus == LibraryStatus.PLAN_TO_WATCH) null else selectedWatchMethod,
                                     selectedEpisode
                                 )
                             },
@@ -469,6 +468,7 @@ fun AddToLibraryDialog(
                             enabled =
                                 episodeSelectionIsValid &&
                                     dateSelectionIsValid &&
+                                    watchMethodSelectionIsValid &&
                                     !isSaving &&
                                     !isLoadingTvDetails &&
                                     !isLoadingSeason,
@@ -787,6 +787,30 @@ private fun NativeDateSelector(
 }
 
 @Composable
+private fun WatchMethodOption(
+    modifier: Modifier,
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier,
+        shape = RoundedCornerShape(14.dp),
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = if (selected) {
+                DialogPrimary.copy(alpha = 0.18f)
+            } else {
+                Color.Transparent
+            },
+            contentColor = if (selected) DialogPrimary else DialogTextSecondary
+        )
+    ) {
+        Text(label, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
+    }
+}
+
+@Composable
 private fun progressChipColors() =
     FilterChipDefaults.filterChipColors(
         containerColor = DialogSurfaceLight,
@@ -794,22 +818,6 @@ private fun progressChipColors() =
         selectedContainerColor =
             DialogPrimary.copy(alpha = 0.18f),
         selectedLabelColor = DialogPrimary
-    )
-
-@Composable
-private fun dialogTextFieldColors() =
-    OutlinedTextFieldDefaults.colors(
-        focusedTextColor = DialogTextPrimary,
-        unfocusedTextColor = DialogTextPrimary,
-        cursorColor = DialogPrimary,
-        focusedBorderColor = DialogPrimary,
-        unfocusedBorderColor = DialogSurfaceLight,
-        focusedContainerColor = DialogBackground,
-        unfocusedContainerColor = DialogBackground,
-        focusedPlaceholderColor = DialogTextSecondary,
-        unfocusedPlaceholderColor = DialogTextSecondary,
-        focusedSupportingTextColor = DialogTextSecondary,
-        unfocusedSupportingTextColor = DialogTextSecondary
     )
 
 private fun formatEpochDay(
