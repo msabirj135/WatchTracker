@@ -562,9 +562,23 @@ class LibraryRepository(
         )
     }
 
+    suspend fun updateMovieWatchMethod(
+        movie: LibraryItem,
+        watchMethod: String
+    ) {
+        if (movie.mediaType != "movie" || movie.watchDateEpochDay == null) return
+        libraryItemDao.upsert(
+            movie.copy(
+                watchMethod = watchMethod,
+                updatedAt = System.currentTimeMillis()
+            )
+        )
+    }
+
     suspend fun addMovieRewatch(
         movie: LibraryItem,
-        watchedDateEpochDay: Long
+        watchedDateEpochDay: Long,
+        watchMethod: String
     ) {
         if (movie.mediaType != "movie") return
 
@@ -577,7 +591,8 @@ class LibraryRepository(
                 episodeName = "",
                 watchedDateEpochDay = watchedDateEpochDay,
                 runtimeMinutes = movie.runtimeMinutes,
-                createdAt = System.currentTimeMillis()
+                createdAt = System.currentTimeMillis(),
+                watchMethod = watchMethod
             )
         )
 
@@ -587,6 +602,10 @@ class LibraryRepository(
                 updatedAt = System.currentTimeMillis()
             )
         )
+    }
+
+    suspend fun updateMovieRewatchMethod(recordId: Long, watchMethod: String) {
+        rewatchRecordDao.updateMovieWatchMethod(recordId, watchMethod)
     }
 
     suspend fun addEpisodeRewatch(
