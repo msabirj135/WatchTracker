@@ -68,6 +68,18 @@ data class BackupUiState(
     val safetyBackupEpochMillis: Long? = null
 )
 
+data class DataHealthUiState(
+    val hasRun: Boolean = false,
+    val isWorking: Boolean = false,
+    val orphanedRecords: Int = 0,
+    val futureDatedRecords: Int = 0,
+    val missingMetadataTitles: Int = 0,
+    val message: String? = null
+) {
+    val isHealthy: Boolean
+        get() = hasRun && orphanedRecords == 0 && futureDatedRecords == 0
+}
+
 data class WatchHistoryEntry(
     val key: String,
     val item: LibraryItem,
@@ -500,6 +512,9 @@ class LibraryViewModel(
     )
         private set
 
+    var dataHealthUiState = mutableStateOf(DataHealthUiState())
+        private set
+
     init {
         observeLibrary()
     }
@@ -743,6 +758,62 @@ class LibraryViewModel(
 
     fun deleteCustomList(listId: Long) {
         coroutineScope.launch { repository.deleteCustomList(listId) }
+    }
+
+    fun runDataHealthCheck() {
+        dataHealthUiState.value = calculateDataHealth(uiState.value)
+    }
+
+    fun repairDataHealth() {
+        if (dataHealthUiState.value.isWorking) return
+        dataHealthUiState.value = dataHealthUiState.value.copy(
+            isWorking = true,
+            message = null
+        )
+        coroutineScope.launch {
+            try {
+                val removed = withContext(Dispatchers.IO) {
+                    repository.repairOrphanedData()
+                }
+                dataHealthUiState.value = calculateDataHealth(uiState.value).copy(
+                    orphanedRecords = 0,
+                    message = if (removed == 0) {
+                        "No orphaned records needed repair."
+                    } else {
+                        "Removed $removed orphaned ${if (removed == 1) "record" else "records"}."
+                    }
+                )
+            } catch (exception: Exception) {
+                dataHealthUiState.value = dataHealthUiState.value.copy(
+                    isWorking = false,
+                    message = exception.message ?: "Unable to repair the database."
+                )
+            }
+        }
+    }
+
+    private fun calculateDataHealth(state: LibraryUiState): DataHealthUiState {
+        val titleKeys = state.items.map { it.tmdbId to it.mediaType }.toSet()
+        val listIds = state.customLists.map { it.id }.toSet()
+        val tvIds = state.tvShows.map { it.tmdbId }.toSet()
+        val orphaned = state.customListItems.count { item ->
+            item.listId !in listIds || (item.tmdbId to item.mediaType) !in titleKeys
+        } + state.episodeWatches.count { it.tmdbShowId !in tvIds } +
+            state.rewatchRecords.count { (it.tmdbId to it.mediaType) !in titleKeys }
+        val today = LocalDate.now().toEpochDay()
+        val futureDated = state.items.count { (it.watchDateEpochDay ?: Long.MIN_VALUE) > today } +
+            state.episodeWatches.count { it.watchedDateEpochDay > today } +
+            state.rewatchRecords.count { it.watchedDateEpochDay > today }
+        val missingMetadata = state.items.count { item ->
+            item.genres.isEmpty() ||
+                (item.mediaType == "movie" && (item.runtimeMinutes ?: 0) <= 0)
+        }
+        return DataHealthUiState(
+            hasRun = true,
+            orphanedRecords = orphaned,
+            futureDatedRecords = futureDated,
+            missingMetadataTitles = missingMetadata
+        )
     }
 
     fun exportBackup(uri: Uri) {
