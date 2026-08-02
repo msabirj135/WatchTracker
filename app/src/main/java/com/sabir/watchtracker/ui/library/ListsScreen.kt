@@ -86,6 +86,13 @@ private enum class ListsOverviewSection(val label: String) {
     MY_LISTS("My Lists")
 }
 
+private data class RewatchedTitleEntry(
+    val item: LibraryItem,
+    val rewatchCount: Int,
+    val latestRewatchEpochDay: Long,
+    val totalMinutes: Int
+)
+
 private fun listAccent(key: String?): Color =
     listColors.firstOrNull { it.first == key }?.second ?: ListsPrimary
 
@@ -107,20 +114,62 @@ fun ListsScreen(
 ) {
     var selectedMonth by remember { mutableStateOf<MonthlyWatchList?>(null) }
     var theatreListIsOpen by remember { mutableStateOf(false) }
+    var highlyRatedListIsOpen by remember { mutableStateOf(false) }
+    var rewatchedListIsOpen by remember { mutableStateOf(false) }
     var selectedMonthlyEntry by remember { mutableStateOf<MonthlyGridEntry?>(null) }
     var selectedList by remember { mutableStateOf<CustomList?>(null) }
     var showCreateDialog by remember { mutableStateOf(false) }
     var showAddTitles by remember { mutableStateOf(false) }
     var editingList by remember { mutableStateOf<CustomList?>(null) }
 
+    val highlyRatedItems = remember(state.items) {
+        state.items
+            .filter { item -> (item.personalRating ?: 0.0) >= 8.0 }
+            .sortedWith(
+                compareByDescending<LibraryItem> { item ->
+                    item.personalRating ?: 0.0
+                }.thenByDescending { item ->
+                    item.watchDateEpochDay ?: Long.MIN_VALUE
+                }
+            )
+    }
+    val rewatchedEntries = remember(state.items, state.rewatchRecords) {
+        val itemsByKey = state.items.associateBy { item ->
+            item.mediaType to item.tmdbId
+        }
+        state.rewatchRecords
+            .groupBy { record -> record.mediaType to record.tmdbId }
+            .mapNotNull { (key, records) ->
+                val item = itemsByKey[key] ?: return@mapNotNull null
+                RewatchedTitleEntry(
+                    item = item,
+                    rewatchCount = records.size,
+                    latestRewatchEpochDay = records.maxOf { record ->
+                        record.watchedDateEpochDay
+                    },
+                    totalMinutes = records.sumOf { record ->
+                        record.runtimeMinutes ?: 0
+                    }
+                )
+            }
+            .sortedByDescending { entry -> entry.latestRewatchEpochDay }
+    }
+
     BackHandler(
-        enabled = selectedMonthlyEntry != null || selectedMonth != null || selectedList != null || theatreListIsOpen
+        enabled = selectedMonthlyEntry != null ||
+            selectedMonth != null ||
+            selectedList != null ||
+            theatreListIsOpen ||
+            highlyRatedListIsOpen ||
+            rewatchedListIsOpen
     ) {
         when {
             selectedMonthlyEntry != null -> selectedMonthlyEntry = null
             selectedMonth != null -> selectedMonth = null
             selectedList != null -> selectedList = null
             theatreListIsOpen -> theatreListIsOpen = false
+            highlyRatedListIsOpen -> highlyRatedListIsOpen = false
+            rewatchedListIsOpen -> rewatchedListIsOpen = false
         }
     }
 
@@ -131,6 +180,20 @@ fun ListsScreen(
             moviesThisYear = state.theatreMoviesThisYear,
             totalMinutes = state.theatreWatchMinutes,
             onBack = { theatreListIsOpen = false },
+            onItemClick = onItemClick
+        )
+
+        highlyRatedListIsOpen -> HighlyRatedDetail(
+            paddingValues = paddingValues,
+            items = highlyRatedItems,
+            onBack = { highlyRatedListIsOpen = false },
+            onItemClick = onItemClick
+        )
+
+        rewatchedListIsOpen -> RewatchedDetail(
+            paddingValues = paddingValues,
+            entries = rewatchedEntries,
+            onBack = { rewatchedListIsOpen = false },
             onItemClick = onItemClick
         )
 
@@ -179,6 +242,10 @@ fun ListsScreen(
             onBackClick = onBackClick,
             onNewList = { showCreateDialog = true },
             onTheatreClick = { theatreListIsOpen = true },
+            highlyRatedItems = highlyRatedItems,
+            onHighlyRatedClick = { highlyRatedListIsOpen = true },
+            rewatchedEntries = rewatchedEntries,
+            onRewatchedClick = { rewatchedListIsOpen = true },
             onMonthClick = { selectedMonth = it },
             onListClick = { selectedList = it }
         )
@@ -238,6 +305,10 @@ private fun ListsOverview(
     onBackClick: () -> Unit,
     onNewList: () -> Unit,
     onTheatreClick: () -> Unit,
+    highlyRatedItems: List<LibraryItem>,
+    onHighlyRatedClick: () -> Unit,
+    rewatchedEntries: List<RewatchedTitleEntry>,
+    onRewatchedClick: () -> Unit,
     onMonthClick: (MonthlyWatchList) -> Unit,
     onListClick: (CustomList) -> Unit
 ) {
@@ -309,6 +380,20 @@ private fun ListsOverview(
                     moviesThisYear = state.theatreMoviesThisYear,
                     totalMinutes = state.theatreWatchMinutes,
                     onClick = onTheatreClick
+                )
+            }
+
+            item {
+                HighlyRatedSmartListCard(
+                    items = highlyRatedItems,
+                    onClick = onHighlyRatedClick
+                )
+            }
+
+            item {
+                RewatchedSmartListCard(
+                    entries = rewatchedEntries,
+                    onClick = onRewatchedClick
                 )
             }
 
@@ -503,6 +588,101 @@ private fun PosterCollage(
 }
 
 @Composable
+private fun HighlyRatedSmartListCard(
+    items: List<LibraryItem>,
+    onClick: () -> Unit
+) {
+    val averageRating = items
+        .mapNotNull { item -> item.personalRating }
+        .takeIf { ratings -> ratings.isNotEmpty() }
+        ?.average()
+
+    AutomaticListOverviewCard(
+        title = "Highly rated",
+        summary = "${items.size} titles • Rated 8 or above",
+        highlight = averageRating?.let { rating ->
+            "Average ★ ${formatListRating(rating)}"
+        } ?: "No highly rated titles yet",
+        posterUrls = items.map { item -> item.posterUrl },
+        fallbackSymbol = "★",
+        accent = Color(0xFFFFC857),
+        onClick = onClick
+    )
+}
+
+@Composable
+private fun RewatchedSmartListCard(
+    entries: List<RewatchedTitleEntry>,
+    onClick: () -> Unit
+) {
+    val repeatCount = entries.sumOf { entry -> entry.rewatchCount }
+    val totalMinutes = entries.sumOf { entry -> entry.totalMinutes }
+
+    AutomaticListOverviewCard(
+        title = "Rewatched",
+        summary = "${entries.size} titles • $repeatCount repeat ${if (repeatCount == 1) "watch" else "watches"}",
+        highlight = formatMinutes(totalMinutes),
+        posterUrls = entries.map { entry -> entry.item.posterUrl },
+        fallbackSymbol = "↻",
+        accent = Color(0xFF4D8DFF),
+        onClick = onClick
+    )
+}
+
+@Composable
+private fun AutomaticListOverviewCard(
+    title: String,
+    summary: String,
+    highlight: String,
+    posterUrls: List<String?>,
+    fallbackSymbol: String,
+    accent: Color,
+    onClick: () -> Unit
+) {
+    Card(
+        onClick = onClick,
+        colors = CardDefaults.cardColors(containerColor = ListsSurface),
+        shape = RoundedCornerShape(18.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            PosterCollage(
+                posterUrls = posterUrls,
+                fallbackSymbol = fallbackSymbol,
+                accent = accent
+            )
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    title,
+                    color = ListsText,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    summary,
+                    color = ListsMuted,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    highlight,
+                    color = accent,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Text("›", color = ListsMuted, fontSize = 24.sp)
+        }
+    }
+}
+
+@Composable
 private fun TheatreSmartListCard(
     entries: List<TheatreWatchEntry>,
     moviesThisYear: Int,
@@ -668,6 +848,170 @@ private fun TheatrePosterCard(
                     color = ListsMuted,
                     fontSize = 8.sp,
                     maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HighlyRatedDetail(
+    paddingValues: PaddingValues,
+    items: List<LibraryItem>,
+    onBack: () -> Unit,
+    onItemClick: (LibraryItem) -> Unit
+) {
+    val movieCount = items.count { item -> item.mediaType == "movie" }
+    val tvShowCount = items.count { item -> item.mediaType == "tv" }
+
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(3),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(ListsBackground)
+            .padding(paddingValues),
+        contentPadding = PaddingValues(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(9.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            DetailHeader("Highly rated", onBack)
+        }
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                MiniSummary(Modifier.weight(1f), items.size.toString(), "Titles")
+                MiniSummary(Modifier.weight(1f), movieCount.toString(), "Movies")
+                MiniSummary(Modifier.weight(1f), tvShowCount.toString(), "TV shows")
+            }
+        }
+        if (items.isEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                EmptyListCard("Titles rated 8 or above will appear here automatically.")
+            }
+        } else {
+            items(
+                items = items,
+                key = { item -> "rated-${item.mediaType}-${item.tmdbId}" }
+            ) { item ->
+                AutomaticTitlePosterCard(
+                    item = item,
+                    accentText = "★ ${formatListRating(item.personalRating ?: 0.0)}",
+                    detailText = item.watchDateEpochDay?.let { date ->
+                        "Watched ${formatShortEpochDay(date)}"
+                    } ?: item.displayMediaType,
+                    accent = Color(0xFFFFC857),
+                    onClick = { onItemClick(item) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RewatchedDetail(
+    paddingValues: PaddingValues,
+    entries: List<RewatchedTitleEntry>,
+    onBack: () -> Unit,
+    onItemClick: (LibraryItem) -> Unit
+) {
+    val totalRewatches = entries.sumOf { entry -> entry.rewatchCount }
+    val totalMinutes = entries.sumOf { entry -> entry.totalMinutes }
+
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(3),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(ListsBackground)
+            .padding(paddingValues),
+        contentPadding = PaddingValues(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(9.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            DetailHeader("Rewatched", onBack)
+        }
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                MiniSummary(Modifier.weight(1f), entries.size.toString(), "Titles")
+                MiniSummary(Modifier.weight(1f), totalRewatches.toString(), "Rewatches")
+                MiniSummary(Modifier.weight(1f), formatMinutes(totalMinutes), "Watch time")
+            }
+        }
+        if (entries.isEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                EmptyListCard("Titles you watch again will appear here automatically.")
+            }
+        } else {
+            items(
+                items = entries,
+                key = { entry ->
+                    "rewatched-${entry.item.mediaType}-${entry.item.tmdbId}"
+                }
+            ) { entry ->
+                AutomaticTitlePosterCard(
+                    item = entry.item,
+                    accentText = "${entry.rewatchCount} ${if (entry.rewatchCount == 1) "rewatch" else "rewatches"}",
+                    detailText = "Last ${formatEpochDayForLists(entry.latestRewatchEpochDay)}",
+                    accent = Color(0xFF4D8DFF),
+                    onClick = { onItemClick(entry.item) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AutomaticTitlePosterCard(
+    item: LibraryItem,
+    accentText: String,
+    detailText: String,
+    accent: Color,
+    onClick: () -> Unit
+) {
+    Card(
+        onClick = onClick,
+        colors = CardDefaults.cardColors(containerColor = ListsSurface),
+        shape = RoundedCornerShape(13.dp)
+    ) {
+        Column {
+            AsyncImage(
+                model = item.posterUrl,
+                contentDescription = item.title,
+                modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f),
+                contentScale = ContentScale.Crop
+            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(84.dp)
+                    .padding(8.dp)
+            ) {
+                Text(
+                    item.title,
+                    modifier = Modifier.height(28.dp),
+                    color = ListsText,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = 12.sp
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    accentText,
+                    color = accent,
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    detailText,
+                    color = ListsMuted,
+                    fontSize = 8.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
@@ -1187,6 +1531,13 @@ private fun formatEpochDayForLists(epochDay: Long): String =
 
 private fun formatShortEpochDay(epochDay: Long): String =
     LocalDate.ofEpochDay(epochDay).format(DateTimeFormatter.ofPattern("dd MMM"))
+
+private fun formatListRating(rating: Double): String =
+    if (rating % 1.0 == 0.0) {
+        rating.toInt().toString()
+    } else {
+        "%.1f".format(rating)
+    }
 
 private fun formatMinutes(minutes: Int): String {
     if (minutes <= 0) return "0m"
