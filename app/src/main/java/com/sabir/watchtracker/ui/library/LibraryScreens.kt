@@ -1167,9 +1167,10 @@ fun LibraryScreen(
     onItemClick: (LibraryItem) -> Unit
 ) {
     val isMovieLibrary = title.equals("Movies", ignoreCase = true)
-    var librarySearchQuery: String by remember(title) {
-        mutableStateOf<String>("")
+    val librarySearchQueryState = remember(title) {
+        mutableStateOf("")
     }
+    val librarySearchQuery = librarySearchQueryState.value
     val visibleItems = remember(items, librarySearchQuery) {
         val query = librarySearchQuery.trim()
         if (query.isBlank()) {
@@ -1255,7 +1256,7 @@ fun LibraryScreen(
                 OutlinedTextField(
                     value = librarySearchQuery,
                     onValueChange = { query ->
-                        librarySearchQuery = query
+                        librarySearchQueryState.value = query
                     },
                     modifier = Modifier.fillMaxWidth(),
                     placeholder = {
@@ -1267,7 +1268,9 @@ fun LibraryScreen(
                     trailingIcon = {
                         if (librarySearchQuery.isNotEmpty()) {
                             TextButton(
-                                onClick = { librarySearchQuery = "" }
+                                onClick = {
+                                    librarySearchQueryState.value = ""
+                                }
                             ) {
                                 Text(
                                     text = "×",
