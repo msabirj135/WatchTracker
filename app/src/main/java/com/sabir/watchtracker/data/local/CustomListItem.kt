@@ -10,5 +10,13 @@ data class CustomListItem(
     val listId: Long,
     val tmdbId: Int,
     val mediaType: String,
-    val addedAt: Long
+    val addedAt: Long,
+    val title: String? = null,
+    val overview: String? = null,
+    val posterPath: String? = null,
+    val backdropPath: String? = null,
+    val releaseDate: String? = null,
+    val originalTitle: String? = null,
+    val originalLanguage: String? = null,
+    val tmdbRating: Double? = null
 )
