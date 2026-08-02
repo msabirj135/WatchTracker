@@ -32,6 +32,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -924,7 +926,7 @@ private fun HistoryCard(
             Column(
                 modifier = Modifier
                     .padding(14.dp)
-                    .height(110.dp)
+                    .height(82.dp)
             ) {
                 Text(
                     text = item.title,
@@ -967,23 +969,6 @@ private fun HistoryCard(
                     maxLines = 1
                 )
 
-                Spacer(
-                    modifier = Modifier.height(5.dp)
-                )
-
-                Text(
-                    text = item.personalRating
-                        ?.let { "★ ${formatRating(it)}" }
-                        ?: "Not rated",
-                    color = if (item.personalRating != null) {
-                        ScreenWarning
-                    } else {
-                        ScreenTextSecondary
-                    },
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1
-                )
             }
         }
     }
@@ -1181,6 +1166,23 @@ fun LibraryScreen(
     onAddClick: () -> Unit,
     onItemClick: (LibraryItem) -> Unit
 ) {
+    val isMovieLibrary = title.equals("Movies", ignoreCase = true)
+    var librarySearchQuery by remember(title) {
+        mutableStateOf("")
+    }
+    val visibleItems = remember(items, librarySearchQuery) {
+        val query = librarySearchQuery.trim()
+        if (query.isBlank()) {
+            items
+        } else {
+            items.filter { item ->
+                item.title.contains(query, ignoreCase = true) ||
+                    item.originalTitle
+                        ?.contains(query, ignoreCase = true) == true
+            }
+        }
+    }
+
     LazyVerticalGrid(
         columns = GridCells.Fixed(3),
         modifier = Modifier
@@ -1248,6 +1250,48 @@ fun LibraryScreen(
             }
         }
 
+        if (isMovieLibrary && items.isNotEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                OutlinedTextField(
+                    value = librarySearchQuery,
+                    onValueChange = { query ->
+                        librarySearchQuery = query
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = {
+                        Text(
+                            text = "Search your movies",
+                            color = ScreenTextSecondary
+                        )
+                    },
+                    trailingIcon = {
+                        if (librarySearchQuery.isNotEmpty()) {
+                            TextButton(
+                                onClick = { librarySearchQuery = "" }
+                            ) {
+                                Text(
+                                    text = "×",
+                                    color = ScreenTextSecondary,
+                                    fontSize = 20.sp
+                                )
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(14.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = ScreenTextPrimary,
+                        unfocusedTextColor = ScreenTextPrimary,
+                        cursorColor = ScreenPrimary,
+                        focusedBorderColor = ScreenPrimary,
+                        unfocusedBorderColor = ScreenSurfaceLight,
+                        focusedContainerColor = ScreenSurface,
+                        unfocusedContainerColor = ScreenSurface
+                    )
+                )
+            }
+        }
+
         when {
             isLoading -> {
                 item(span = { GridItemSpan(maxLineSpan) }) {
@@ -1264,9 +1308,28 @@ fun LibraryScreen(
                 }
             }
 
+            visibleItems.isEmpty() -> {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = ScreenSurface
+                        ),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Text(
+                            text = "No movies match ‘$librarySearchQuery’.",
+                            modifier = Modifier.padding(20.dp),
+                            color = ScreenTextSecondary,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+            }
+
             else -> {
                 gridItems(
-                    items = items,
+                    items = visibleItems,
                     key = { item ->
                         "${item.mediaType}-${item.tmdbId}"
                     }
@@ -1295,6 +1358,26 @@ private fun LibraryGridCard(
     val watchedEpisodeCount = episodeWatches.size
     val watchedEpisodeMinutes = episodeWatches.sumOf { watch ->
         watch.runtimeMinutes ?: 0
+    }
+    val totalEpisodeCount = item.totalEpisodes
+        ?.takeIf { total -> total > 0 }
+    val totalSeasonCount = item.totalSeasons
+        ?.takeIf { total -> total > 0 }
+    val tvProgressLabel = when {
+        item.mediaType != "tv" -> ""
+        item.status == LibraryStatus.COMPLETED -> "Completed"
+        totalEpisodeCount != null &&
+            watchedEpisodeCount >= totalEpisodeCount -> "Caught up"
+        totalEpisodeCount != null -> {
+            val remaining = (totalEpisodeCount - watchedEpisodeCount)
+                .coerceAtLeast(0)
+            "$remaining ${if (remaining == 1) "episode" else "episodes"} remaining"
+        }
+        watchedEpisodeCount > 0 -> "Watching"
+        totalSeasonCount != null -> {
+            "$totalSeasonCount ${if (totalSeasonCount == 1) "season" else "seasons"} remaining"
+        }
+        else -> "Not started"
     }
     Card(
         onClick = onClick,
@@ -1335,7 +1418,7 @@ private fun LibraryGridCard(
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = if (item.mediaType == "tv") {
-                        "$watchedEpisodeCount ${if (watchedEpisodeCount == 1) "episode" else "episodes"}"
+                        tvProgressLabel
                     } else {
                         item.status.displayName
                     },
