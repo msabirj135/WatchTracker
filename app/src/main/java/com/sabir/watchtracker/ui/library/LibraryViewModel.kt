@@ -497,6 +497,31 @@ data class LibraryUiState(
             .sortedByDescending { it.addedAt }
             .mapNotNull { listItem ->
                 itemByKey[listItem.tmdbId to listItem.mediaType]
+                    ?: listItem.title?.let { title ->
+                        LibraryItem(
+                            tmdbId = listItem.tmdbId,
+                            mediaType = listItem.mediaType,
+                            title = title,
+                            overview = listItem.overview.orEmpty(),
+                            posterPath = listItem.posterPath,
+                            backdropPath = listItem.backdropPath,
+                            releaseDate = listItem.releaseDate.orEmpty(),
+                            tmdbRating = listItem.tmdbRating ?: 0.0,
+                            status = LibraryStatus.PLAN_TO_WATCH,
+                            watchDateEpochDay = null,
+                            personalRating = null,
+                            notes = "",
+                            currentSeason = null,
+                            currentEpisode = null,
+                            totalSeasons = null,
+                            totalEpisodes = null,
+                            runtimeMinutes = null,
+                            originalTitle = listItem.originalTitle,
+                            originalLanguage = listItem.originalLanguage,
+                            addedAt = listItem.addedAt,
+                            updatedAt = listItem.addedAt
+                        )
+                    }
             }
     }
 }
@@ -798,6 +823,10 @@ class LibraryViewModel(
 
     fun addToCustomList(listId: Long, item: LibraryItem) {
         coroutineScope.launch { repository.addToCustomList(listId, item) }
+    }
+
+    fun addSearchResultToCustomList(listId: Long, result: com.sabir.watchtracker.data.remote.TmdbSearchResult) {
+        coroutineScope.launch { repository.addSearchResultToCustomList(listId, result) }
     }
 
     fun removeFromCustomList(listId: Long, item: LibraryItem) {
