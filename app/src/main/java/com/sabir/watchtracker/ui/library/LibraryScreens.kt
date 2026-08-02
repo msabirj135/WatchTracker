@@ -1434,7 +1434,11 @@ private fun LibraryGridCard(
                         item.status.displayName
                     },
                     color = if (item.mediaType == "tv") {
-                        ScreenPrimary
+                        if (item.status == LibraryStatus.COMPLETED) {
+                            ScreenSuccess
+                        } else {
+                            ScreenPrimary
+                        }
                     } else {
                         when (item.status) {
                             LibraryStatus.COMPLETED -> ScreenSuccess
