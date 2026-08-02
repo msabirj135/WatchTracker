@@ -307,6 +307,7 @@ private fun WatchTrackerApp(
                             onDuplicateList = libraryViewModel::duplicateCustomList,
                             onDeleteList = libraryViewModel::deleteCustomList,
                             onAddItem = libraryViewModel::addToCustomList,
+                            onAddSearchResult = libraryViewModel::addSearchResultToCustomList,
                             onRemoveItem = libraryViewModel::removeFromCustomList,
                             onItemClick = { item -> selectedLibraryItem = item }
                         )
