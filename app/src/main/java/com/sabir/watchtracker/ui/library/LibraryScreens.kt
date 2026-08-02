@@ -1558,10 +1558,7 @@ private fun LibraryPoster(
             )
         }
 
-        if (
-            item.mediaType == "movie" &&
-            item.personalRating != null
-        ) {
+        if (item.personalRating != null) {
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
