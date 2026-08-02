@@ -4,6 +4,7 @@ import android.content.Context
 import com.sabir.watchtracker.data.local.EpisodeWatch
 import com.sabir.watchtracker.data.local.CustomList
 import com.sabir.watchtracker.data.local.CustomListItem
+import com.sabir.watchtracker.data.local.ContinueWatchingCache
 import com.sabir.watchtracker.data.local.LibraryItem
 import com.sabir.watchtracker.data.local.LibraryStatus
 import com.sabir.watchtracker.data.local.RewatchRecord
@@ -27,6 +28,19 @@ class LibraryRepository(
     private val customListDao = database.customListDao()
 
     private val rewatchRecordDao = database.rewatchRecordDao()
+
+    private val continueWatchingCacheDao = database.continueWatchingCacheDao()
+
+    suspend fun getContinueWatchingCache(): List<ContinueWatchingCache> =
+        continueWatchingCacheDao.getAll()
+
+    suspend fun saveContinueWatchingCache(cache: ContinueWatchingCache) {
+        continueWatchingCacheDao.upsert(cache)
+    }
+
+    suspend fun deleteContinueWatchingCache(tmdbShowId: Int) {
+        continueWatchingCacheDao.deleteForShow(tmdbShowId)
+    }
 
     fun observeCustomLists(): Flow<List<CustomList>> =
         customListDao.observeLists()
@@ -153,7 +167,8 @@ class LibraryRepository(
     suspend fun repairOrphanedData(): Int {
         return customListDao.deleteOrphanItems() +
             episodeWatchDao.deleteOrphanWatches() +
-            rewatchRecordDao.deleteOrphanRecords()
+            rewatchRecordDao.deleteOrphanRecords() +
+            continueWatchingCacheDao.deleteOrphans()
     }
 
     fun observeAll(): Flow<List<LibraryItem>> {
@@ -681,6 +696,7 @@ class LibraryRepository(
             episodeWatchDao.deleteForShow(
                 item.tmdbId
             )
+            continueWatchingCacheDao.deleteForShow(item.tmdbId)
         }
 
         customListDao.removeTitleFromAllLists(
