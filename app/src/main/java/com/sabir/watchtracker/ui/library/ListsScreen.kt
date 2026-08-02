@@ -27,6 +27,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -78,6 +79,11 @@ private enum class CustomListSort(val label: String) {
     ADDED("Added"),
     TITLE("A–Z"),
     RECENT("Recently watched")
+}
+
+private enum class ListsOverviewSection(val label: String) {
+    AUTOMATIC("Automatic"),
+    MY_LISTS("My Lists")
 }
 
 private fun listAccent(key: String?): Color =
@@ -235,6 +241,10 @@ private fun ListsOverview(
     onMonthClick: (MonthlyWatchList) -> Unit,
     onListClick: (CustomList) -> Unit
 ) {
+    var selectedSection by remember {
+        mutableStateOf(ListsOverviewSection.AUTOMATIC)
+    }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -264,66 +274,228 @@ private fun ListsOverview(
             }
         }
 
-        item { SectionTitle("Smart lists", "Automatic collections and monthly history") }
-
         item {
-            TheatreSmartListCard(
-                movieCount = state.theatreWatchEntries.size,
-                moviesThisYear = state.theatreMoviesThisYear,
-                totalMinutes = state.theatreWatchMinutes,
-                onClick = onTheatreClick
-            )
-        }
-
-        if (state.monthlyLists.isEmpty()) {
-            item { EmptyListCard("Watch a movie or episode to create your first monthly list.") }
-        } else {
-            state.monthlyLists.groupBy { it.year }.forEach { (year, months) ->
-                item {
-                    Text(year.toString(), color = ListsPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                }
-                columnItems(months, key = { "month-${it.year}-${it.month}" }) { month ->
-                    MonthCard(month, onMonthClick)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                ListsOverviewSection.entries.forEach { section ->
+                    FilterChip(
+                        selected = selectedSection == section,
+                        onClick = { selectedSection = section },
+                        label = {
+                            Text(
+                                text = section.label,
+                                fontWeight = FontWeight.Bold
+                            )
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
                 }
             }
         }
 
-        item { SectionTitle("My lists", "${state.customLists.size} custom lists") }
+        if (selectedSection == ListsOverviewSection.AUTOMATIC) {
+            item {
+                SectionTitle(
+                    "Automatic lists",
+                    "Collections built from your watch history"
+                )
+            }
 
-        if (state.customLists.isEmpty()) {
-            item { EmptyListCard("Create a list for favourites, recommendations or anything else.") }
-        } else {
-            columnItems(state.customLists, key = { it.id }) { list ->
-                val count = state.customListItems.count { it.listId == list.id }
-                Card(
-                    onClick = { onListClick(list) },
-                    colors = CardDefaults.cardColors(containerColor = ListsSurface),
-                    shape = RoundedCornerShape(18.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(18.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        val accent = listAccent(list.colorKey)
-                        Box(
-                            modifier = Modifier.size(48.dp).background(
-                                accent.copy(alpha = .14f), RoundedCornerShape(14.dp)
-                            ),
-                            contentAlignment = Alignment.Center
-                        ) { Text(listIcon(list.iconKey), color = accent, fontSize = 23.sp) }
-                        Spacer(Modifier.width(14.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(list.name, color = ListsText, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                            Text(
-                                list.description.ifBlank { "$count titles" },
-                                color = ListsMuted,
-                                fontSize = 12.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        Text(count.toString(), color = ListsText, fontWeight = FontWeight.Bold)
+            item {
+                TheatreSmartListCard(
+                    entries = state.theatreWatchEntries,
+                    moviesThisYear = state.theatreMoviesThisYear,
+                    totalMinutes = state.theatreWatchMinutes,
+                    onClick = onTheatreClick
+                )
+            }
+
+            if (state.monthlyLists.isEmpty()) {
+                item {
+                    EmptyListCard(
+                        "Watch a movie or episode to create your first monthly list."
+                    )
+                }
+            } else {
+                state.monthlyLists.groupBy { it.year }.forEach { (year, months) ->
+                    item {
+                        Text(
+                            year.toString(),
+                            color = ListsPrimary,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
+                    columnItems(
+                        months,
+                        key = { "month-${it.year}-${it.month}" }
+                    ) { month ->
+                        MonthCard(month, onMonthClick)
+                    }
+                }
+            }
+        } else {
+            item {
+                SectionTitle(
+                    "My Lists",
+                    "${state.customLists.size} custom ${if (state.customLists.size == 1) "list" else "lists"}"
+                )
+            }
+
+            if (state.customLists.isEmpty()) {
+                item {
+                    EmptyListCard(
+                        "Create a list for favourites, recommendations or anything else."
+                    )
+                }
+                item {
+                    Button(
+                        onClick = onNewList,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = ListsPrimary
+                        ),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Text("+ Create your first list")
+                    }
+                }
+            } else {
+                columnItems(state.customLists, key = { it.id }) { list ->
+                    val listItems = state.itemsForList(list.id)
+                    val tvIds = listItems
+                        .filter { item -> item.mediaType == "tv" }
+                        .map { item -> item.tmdbId }
+                        .toSet()
+                    val movieMinutes = listItems
+                        .filter { item ->
+                            item.mediaType == "movie" &&
+                                item.watchDateEpochDay != null
+                        }
+                        .sumOf { item -> item.runtimeMinutes ?: 0 }
+                    val episodeMinutes = state.episodeWatches
+                        .filter { watch -> watch.tmdbShowId in tvIds }
+                        .sumOf { watch -> watch.runtimeMinutes ?: 0 }
+
+                    CustomListOverviewCard(
+                        list = list,
+                        items = listItems,
+                        totalMinutes = movieMinutes + episodeMinutes,
+                        onClick = { onListClick(list) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CustomListOverviewCard(
+    list: CustomList,
+    items: List<LibraryItem>,
+    totalMinutes: Int,
+    onClick: () -> Unit
+) {
+    val movieCount = items.count { item -> item.mediaType == "movie" }
+    val tvShowCount = items.count { item -> item.mediaType == "tv" }
+    val latestWatchDate = items.maxOfOrNull { item ->
+        item.watchDateEpochDay ?: Long.MIN_VALUE
+    }?.takeIf { date -> date != Long.MIN_VALUE }
+    val accent = listAccent(list.colorKey)
+
+    Card(
+        onClick = onClick,
+        colors = CardDefaults.cardColors(containerColor = ListsSurface),
+        shape = RoundedCornerShape(18.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            PosterCollage(
+                posterUrls = items.map { item -> item.posterUrl },
+                fallbackSymbol = listIcon(list.iconKey),
+                accent = accent
+            )
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    list.name,
+                    color = ListsText,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    "$movieCount movies • $tvShowCount TV shows",
+                    color = ListsMuted,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    buildString {
+                        append(formatMinutes(totalMinutes))
+                        latestWatchDate?.let { date ->
+                            append(" • Last ")
+                            append(formatShortEpochDay(date))
+                        }
+                    },
+                    color = accent,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Text("›", color = ListsMuted, fontSize = 24.sp)
+        }
+    }
+}
+
+@Composable
+private fun PosterCollage(
+    posterUrls: List<String?>,
+    fallbackSymbol: String,
+    accent: Color = ListsPrimary
+) {
+    val availablePosters = posterUrls
+        .filterNotNull()
+        .distinct()
+        .take(3)
+
+    Row(
+        modifier = Modifier
+            .width(78.dp)
+            .height(58.dp)
+            .clip(RoundedCornerShape(13.dp))
+    ) {
+        repeat(3) { index ->
+            val posterUrl = availablePosters.getOrNull(index)
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxSize()
+                    .background(ListsSurfaceLight),
+                contentAlignment = Alignment.Center
+            ) {
+                if (posterUrl != null) {
+                    AsyncImage(
+                        model = posterUrl,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else if (index == 0) {
+                    Text(
+                        text = fallbackSymbol,
+                        color = accent,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }
@@ -332,7 +504,7 @@ private fun ListsOverview(
 
 @Composable
 private fun TheatreSmartListCard(
-    movieCount: Int,
+    entries: List<TheatreWatchEntry>,
     moviesThisYear: Int,
     totalMinutes: Int,
     onClick: () -> Unit
@@ -343,26 +515,28 @@ private fun TheatreSmartListCard(
         shape = RoundedCornerShape(18.dp)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(18.dp),
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier.size(52.dp).background(
-                    ListsPrimary.copy(alpha = .14f), RoundedCornerShape(15.dp)
-                ),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("🎟", color = ListsPrimary, fontSize = 23.sp)
-            }
+            PosterCollage(
+                posterUrls = entries.map { entry -> entry.item.posterUrl },
+                fallbackSymbol = "🎟"
+            )
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text("Theatre watches", color = ListsText, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 Text(
-                    "$movieCount movies • $moviesThisYear this year • ${formatMinutes(totalMinutes)}",
+                    "${entries.size} movies • $moviesThisYear this year",
                     color = ListsMuted,
                     fontSize = 11.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    formatMinutes(totalMinutes),
+                    color = ListsPrimary,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold
                 )
             }
             Text("›", color = ListsMuted, fontSize = 24.sp)
@@ -508,24 +682,28 @@ private fun MonthCard(month: MonthlyWatchList, onClick: (MonthlyWatchList) -> Un
         shape = RoundedCornerShape(18.dp)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(18.dp),
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier.size(52.dp).background(
-                    ListsPrimary.copy(alpha = .14f), RoundedCornerShape(15.dp)
-                ),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(month.month.toString().padStart(2, '0'), color = ListsPrimary, fontWeight = FontWeight.Bold)
-            }
+            PosterCollage(
+                posterUrls = month.entries.map { entry -> entry.item.posterUrl },
+                fallbackSymbol = month.month.toString().padStart(2, '0')
+            )
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(month.label, color = ListsText, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 Text(
-                    "${month.movieCount} movies • ${month.tvShowCount} TV shows • ${formatMinutes(month.totalMinutes)}",
+                    "${month.movieCount} movies • ${month.tvShowCount} TV shows",
                     color = ListsMuted,
-                    fontSize = 12.sp
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    formatMinutes(month.totalMinutes),
+                    color = ListsPrimary,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold
                 )
             }
             Text("›", color = ListsMuted, fontSize = 24.sp)
