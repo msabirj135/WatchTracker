@@ -55,7 +55,7 @@ android {
         buildConfigField(
             type = "int",
             name = "DATABASE_SCHEMA_VERSION",
-            value = "10"
+            value = "11"
         )
 
         buildConfigField(
