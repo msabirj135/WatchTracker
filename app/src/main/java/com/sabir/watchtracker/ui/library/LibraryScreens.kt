@@ -1167,8 +1167,9 @@ fun LibraryScreen(
     onItemClick: (LibraryItem) -> Unit
 ) {
     val isMovieLibrary = title.equals("Movies", ignoreCase = true)
-    val librarySearchQueryState = remember(title) {
-        mutableStateOf("")
+    val librarySearchQueryState:
+        androidx.compose.runtime.MutableState<String> = remember(title) {
+            mutableStateOf<String>("")
     }
     val librarySearchQuery = librarySearchQueryState.value
     val visibleItems = remember(items, librarySearchQuery) {
