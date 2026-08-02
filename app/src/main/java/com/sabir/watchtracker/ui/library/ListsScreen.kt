@@ -379,6 +379,13 @@ private fun TheatreWatchesDetail(
     onBack: () -> Unit,
     onItemClick: (LibraryItem) -> Unit
 ) {
+    val entriesByYear = entries
+        .groupBy { entry ->
+            LocalDate.ofEpochDay(entry.latestVisitEpochDay).year
+        }
+        .toList()
+        .sortedByDescending { (year, _) -> year }
+
     LazyVerticalGrid(
         columns = GridCells.Fixed(3),
         modifier = Modifier.fillMaxSize().background(ListsBackground).padding(paddingValues),
@@ -401,8 +408,35 @@ private fun TheatreWatchesDetail(
                 EmptyListCard("Movies marked as watched in a theatre will appear here automatically.")
             }
         } else {
-            items(entries, key = { entry -> "theatre-${entry.item.tmdbId}" }) { entry ->
-                TheatrePosterCard(entry = entry, onClick = { onItemClick(entry.item) })
+            entriesByYear.forEach { (year, yearEntries) ->
+                item(
+                    key = "theatre-year-$year",
+                    span = { GridItemSpan(maxLineSpan) }
+                ) {
+                    Text(
+                        text = "$year (${yearEntries.size} ${if (yearEntries.size == 1) "movie" else "movies"})",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp, bottom = 2.dp),
+                        color = ListsText,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                items(
+                    items = yearEntries.sortedByDescending { entry ->
+                        entry.latestVisitEpochDay
+                    },
+                    key = { entry ->
+                        "theatre-$year-${entry.item.tmdbId}"
+                    }
+                ) { entry ->
+                    TheatrePosterCard(
+                        entry = entry,
+                        onClick = { onItemClick(entry.item) }
+                    )
+                }
             }
         }
     }
@@ -450,7 +484,7 @@ private fun TheatrePosterCard(
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "Last • ${formatShortEpochDay(entry.latestVisitEpochDay)}",
+                    "Last • ${formatEpochDayForLists(entry.latestVisitEpochDay)}",
                     color = ListsMuted,
                     fontSize = 8.sp,
                     maxLines = 1
