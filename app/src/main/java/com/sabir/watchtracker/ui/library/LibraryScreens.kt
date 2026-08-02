@@ -136,8 +136,12 @@ fun HomeScreen(
         ) {
             item {
                 SectionHeader(
-                    title = "Up next",
-                    action = "${libraryUiState.tvQueueCandidates.size} shows"
+                    title = "Continue Watching",
+                    action = if (upNextUiState.isRefreshing) {
+                        "Updating…"
+                    } else {
+                        "${upNextUiState.entries.size} episodes"
+                    }
                 )
             }
 
