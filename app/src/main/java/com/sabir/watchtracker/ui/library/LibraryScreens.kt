@@ -1167,7 +1167,9 @@ fun LibraryScreen(
     onAddClick: () -> Unit,
     onItemClick: (LibraryItem) -> Unit
 ) {
-    val isMovieLibrary = title.equals("Movies", ignoreCase = true)
+    val supportsLibrarySearch =
+        title.equals("Movies", ignoreCase = true) ||
+            title.equals("TV Shows", ignoreCase = true)
     val librarySearchQueryState:
         androidx.compose.runtime.MutableState<String> = remember(title) {
             mutableStateOf<String>("")
@@ -1253,7 +1255,7 @@ fun LibraryScreen(
             }
         }
 
-        if (isMovieLibrary && items.isNotEmpty()) {
+        if (supportsLibrarySearch && items.isNotEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 OutlinedTextField(
                     value = librarySearchQuery,
@@ -1263,7 +1265,11 @@ fun LibraryScreen(
                     modifier = Modifier.fillMaxWidth(),
                     placeholder = {
                         Text(
-                            text = "Search your movies",
+                            text = if (title.equals("TV Shows", ignoreCase = true)) {
+                                "Search your TV shows"
+                            } else {
+                                "Search your movies"
+                            },
                             color = ScreenTextSecondary
                         )
                     },
@@ -1323,7 +1329,7 @@ fun LibraryScreen(
                         shape = RoundedCornerShape(16.dp)
                     ) {
                         Text(
-                            text = "No movies match ‘$librarySearchQuery’.",
+                            text = "No titles match ‘$librarySearchQuery’.",
                             modifier = Modifier.padding(20.dp),
                             color = ScreenTextSecondary,
                             fontSize = 13.sp
@@ -1376,7 +1382,7 @@ private fun LibraryGridCard(
         totalEpisodeCount != null -> {
             val remaining = (totalEpisodeCount - watchedEpisodeCount)
                 .coerceAtLeast(0)
-            "$remaining ${if (remaining == 1) "episode" else "episodes"} remaining"
+            "$remaining ${if (remaining == 1) "ep" else "eps"} remaining"
         }
         watchedEpisodeCount > 0 -> "Watching"
         totalSeasonCount != null -> {
