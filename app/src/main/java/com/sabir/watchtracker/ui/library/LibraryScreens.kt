@@ -1167,8 +1167,8 @@ fun LibraryScreen(
     onItemClick: (LibraryItem) -> Unit
 ) {
     val isMovieLibrary = title.equals("Movies", ignoreCase = true)
-    var librarySearchQuery by remember(title) {
-        mutableStateOf("")
+    var librarySearchQuery: String by remember(title) {
+        mutableStateOf<String>("")
     }
     val visibleItems = remember(items, librarySearchQuery) {
         val query = librarySearchQuery.trim()
