@@ -1,6 +1,7 @@
 ﻿package com.sabir.watchtracker.ui.library
 
 import android.app.DatePickerDialog
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -86,6 +87,18 @@ fun HomeScreen(
     onItemClick: (LibraryItem) -> Unit
 ) {
     val context = LocalContext.current
+    var showAllContinueWatching by remember { mutableStateOf(false) }
+
+    if (showAllContinueWatching) {
+        ContinueWatchingAllScreen(
+            paddingValues = paddingValues,
+            upNextUiState = upNextUiState,
+            onBack = { showAllContinueWatching = false },
+            onMarkWatched = onMarkUpNextWatched,
+            onItemClick = onItemClick
+        )
+        return
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -139,8 +152,18 @@ fun HomeScreen(
                     title = "Continue Watching",
                     action = if (upNextUiState.isRefreshing) {
                         "Updating…"
+                    } else if (upNextUiState.entries.size > 3) {
+                        "See all"
                     } else {
-                        "${upNextUiState.entries.size} episodes"
+                        "${upNextUiState.entries.size} ${if (upNextUiState.entries.size == 1) "show" else "shows"}"
+                    },
+                    onActionClick = if (
+                        !upNextUiState.isRefreshing &&
+                        upNextUiState.entries.size > 3
+                    ) {
+                        { showAllContinueWatching = true }
+                    } else {
+                        null
                     }
                 )
             }
@@ -186,7 +209,7 @@ fun HomeScreen(
                             )
                         ) {
                             items(
-                                items = upNextUiState.entries,
+                                items = upNextUiState.entries.take(3),
                                 key = { entry -> entry.key }
                             ) { entry ->
                                 UpNextCard(
@@ -692,7 +715,7 @@ private fun UpNextCard(
                             shape = RoundedCornerShape(10.dp)
                         ) {
                             Text(
-                                text = if (isSaving) "Saving…" else "Watched today",
+                                text = if (isSaving) "Saving…" else "Mark watched",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -725,6 +748,101 @@ private fun UpNextCard(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ContinueWatchingAllScreen(
+    paddingValues: PaddingValues,
+    upNextUiState: UpNextUiState,
+    onBack: () -> Unit,
+    onMarkWatched: (UpNextEntry, Long) -> Unit,
+    onItemClick: (LibraryItem) -> Unit
+) {
+    val context = LocalContext.current
+
+    BackHandler(onBack = onBack)
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(ScreenBackground)
+            .padding(paddingValues),
+        contentPadding = PaddingValues(
+            start = 20.dp,
+            end = 20.dp,
+            top = 18.dp,
+            bottom = 32.dp
+        ),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Button(
+                    onClick = onBack,
+                    modifier = Modifier.size(44.dp),
+                    contentPadding = PaddingValues(0.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = ScreenSurfaceLight
+                    ),
+                    shape = RoundedCornerShape(13.dp)
+                ) {
+                    Text("←", fontSize = 20.sp)
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Continue Watching",
+                        color = ScreenTextPrimary,
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "${upNextUiState.entries.size} ${if (upNextUiState.entries.size == 1) "show" else "shows"} ready to continue",
+                        color = ScreenTextSecondary,
+                        fontSize = 12.sp
+                    )
+                }
+                if (upNextUiState.isRefreshing) {
+                    Text(
+                        text = "Updating…",
+                        color = ScreenPrimary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        items(
+            items = upNextUiState.entries,
+            key = { entry -> "all-${entry.key}" }
+        ) { entry ->
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                UpNextCard(
+                    entry = entry,
+                    isSaving = entry.item.tmdbId in upNextUiState.savingShowIds,
+                    onOpenShow = { onItemClick(entry.item) },
+                    onWatchedToday = {
+                        onMarkWatched(entry, LocalDate.now().toEpochDay())
+                    },
+                    onChooseDate = {
+                        showHomeDatePicker(
+                            context = context,
+                            onDateSelected = { epochDay ->
+                                onMarkWatched(entry, epochDay)
+                            }
+                        )
+                    }
+                )
             }
         }
     }
