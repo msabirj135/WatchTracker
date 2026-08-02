@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.sabir.watchtracker.data.local.CustomList
 import com.sabir.watchtracker.data.local.LibraryItem
+import com.sabir.watchtracker.data.local.LibraryStatus
 import com.sabir.watchtracker.data.remote.TmdbSearchResult
 import com.sabir.watchtracker.data.repository.TmdbRepository
 import java.time.LocalDate
@@ -119,6 +120,7 @@ fun ListsScreen(
 ) {
     var selectedMonth by remember { mutableStateOf<MonthlyWatchList?>(null) }
     var theatreListIsOpen by remember { mutableStateOf(false) }
+    var watchlistIsOpen by remember { mutableStateOf(false) }
     var highlyRatedListIsOpen by remember { mutableStateOf(false) }
     var rewatchedListIsOpen by remember { mutableStateOf(false) }
     var selectedMonthlyEntry by remember { mutableStateOf<MonthlyGridEntry?>(null) }
@@ -137,6 +139,11 @@ fun ListsScreen(
                     item.watchDateEpochDay ?: Long.MIN_VALUE
                 }
             )
+    }
+    val watchlistItems = remember(state.items) {
+        state.items
+            .filter { item -> item.status == LibraryStatus.PLAN_TO_WATCH }
+            .sortedByDescending { item -> item.updatedAt }
     }
     val rewatchedEntries = remember(state.items, state.rewatchRecords) {
         val itemsByKey = state.items.associateBy { item ->
@@ -165,6 +172,7 @@ fun ListsScreen(
             selectedMonth != null ||
             selectedList != null ||
             theatreListIsOpen ||
+            watchlistIsOpen ||
             highlyRatedListIsOpen ||
             rewatchedListIsOpen
     ) {
@@ -173,6 +181,7 @@ fun ListsScreen(
             selectedMonth != null -> selectedMonth = null
             selectedList != null -> selectedList = null
             theatreListIsOpen -> theatreListIsOpen = false
+            watchlistIsOpen -> watchlistIsOpen = false
             highlyRatedListIsOpen -> highlyRatedListIsOpen = false
             rewatchedListIsOpen -> rewatchedListIsOpen = false
         }
@@ -185,6 +194,13 @@ fun ListsScreen(
             moviesThisYear = state.theatreMoviesThisYear,
             totalMinutes = state.theatreWatchMinutes,
             onBack = { theatreListIsOpen = false },
+            onItemClick = onItemClick
+        )
+
+        watchlistIsOpen -> WatchlistDetail(
+            paddingValues = paddingValues,
+            items = watchlistItems,
+            onBack = { watchlistIsOpen = false },
             onItemClick = onItemClick
         )
 
@@ -247,6 +263,8 @@ fun ListsScreen(
             onBackClick = onBackClick,
             onNewList = { showCreateDialog = true },
             onTheatreClick = { theatreListIsOpen = true },
+            watchlistItems = watchlistItems,
+            onWatchlistClick = { watchlistIsOpen = true },
             highlyRatedItems = highlyRatedItems,
             onHighlyRatedClick = { highlyRatedListIsOpen = true },
             rewatchedEntries = rewatchedEntries,
@@ -311,6 +329,8 @@ private fun ListsOverview(
     onBackClick: () -> Unit,
     onNewList: () -> Unit,
     onTheatreClick: () -> Unit,
+    watchlistItems: List<LibraryItem>,
+    onWatchlistClick: () -> Unit,
     highlyRatedItems: List<LibraryItem>,
     onHighlyRatedClick: () -> Unit,
     rewatchedEntries: List<RewatchedTitleEntry>,
@@ -388,6 +408,13 @@ private fun ListsOverview(
                     moviesThisYear = state.theatreMoviesThisYear,
                     totalMinutes = state.theatreWatchMinutes,
                     onClick = onTheatreClick
+                )
+            }
+
+            item {
+                WatchlistSmartListCard(
+                    items = watchlistItems,
+                    onClick = onWatchlistClick
                 )
             }
 
@@ -614,6 +641,25 @@ private fun HighlyRatedSmartListCard(
         posterUrls = items.map { item -> item.posterUrl },
         fallbackSymbol = "★",
         accent = Color(0xFFFFC857),
+        onClick = onClick
+    )
+}
+
+@Composable
+private fun WatchlistSmartListCard(
+    items: List<LibraryItem>,
+    onClick: () -> Unit
+) {
+    val movieCount = items.count { item -> item.mediaType == "movie" }
+    val tvShowCount = items.count { item -> item.mediaType == "tv" }
+
+    AutomaticListOverviewCard(
+        title = "Watchlist",
+        summary = "${items.size} planned ${if (items.size == 1) "title" else "titles"}",
+        highlight = "$movieCount movies • $tvShowCount TV shows",
+        posterUrls = items.map { item -> item.posterUrl },
+        fallbackSymbol = "+",
+        accent = Color(0xFFA879FF),
         onClick = onClick
     )
 }
@@ -869,6 +915,10 @@ private fun HighlyRatedDetail(
     onBack: () -> Unit,
     onItemClick: (LibraryItem) -> Unit
 ) {
+    var selectedMediaType by remember { mutableStateOf("movie") }
+    val filteredItems = items.filter { item ->
+        item.mediaType == selectedMediaType
+    }
     val movieCount = items.count { item -> item.mediaType == "movie" }
     val tvShowCount = items.count { item -> item.mediaType == "tv" }
 
@@ -886,19 +936,37 @@ private fun HighlyRatedDetail(
             DetailHeader("Highly rated", onBack)
         }
         item(span = { GridItemSpan(maxLineSpan) }) {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                MiniSummary(Modifier.weight(1f), items.size.toString(), "Titles")
-                MiniSummary(Modifier.weight(1f), movieCount.toString(), "Movies")
-                MiniSummary(Modifier.weight(1f), tvShowCount.toString(), "TV shows")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                FilterChip(
+                    selected = selectedMediaType == "movie",
+                    onClick = { selectedMediaType = "movie" },
+                    label = { Text("Movies ($movieCount)") },
+                    modifier = Modifier.weight(1f)
+                )
+                FilterChip(
+                    selected = selectedMediaType == "tv",
+                    onClick = { selectedMediaType = "tv" },
+                    label = { Text("TV Series ($tvShowCount)") },
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
-        if (items.isEmpty()) {
+        if (filteredItems.isEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) {
-                EmptyListCard("Titles rated 8 or above will appear here automatically.")
+                EmptyListCard(
+                    if (selectedMediaType == "movie") {
+                        "Movies rated 8 or above will appear here automatically."
+                    } else {
+                        "TV series rated 8 or above will appear here automatically."
+                    }
+                )
             }
         } else {
             items(
-                items = items,
+                items = filteredItems,
                 key = { item -> "rated-${item.mediaType}-${item.tmdbId}" }
             ) { item ->
                 AutomaticTitlePosterCard(
@@ -908,6 +976,58 @@ private fun HighlyRatedDetail(
                         "Watched ${formatCompactListDate(date)}"
                     } ?: item.displayMediaType,
                     overlayAccent = Color(0xFFFFC857),
+                    onClick = { onItemClick(item) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun WatchlistDetail(
+    paddingValues: PaddingValues,
+    items: List<LibraryItem>,
+    onBack: () -> Unit,
+    onItemClick: (LibraryItem) -> Unit
+) {
+    val movieCount = items.count { item -> item.mediaType == "movie" }
+    val tvShowCount = items.count { item -> item.mediaType == "tv" }
+
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(3),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(ListsBackground)
+            .padding(paddingValues),
+        contentPadding = PaddingValues(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(9.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            DetailHeader("Watchlist", onBack)
+        }
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                MiniSummary(Modifier.weight(1f), items.size.toString(), "Titles")
+                MiniSummary(Modifier.weight(1f), movieCount.toString(), "Movies")
+                MiniSummary(Modifier.weight(1f), tvShowCount.toString(), "TV shows")
+            }
+        }
+        if (items.isEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                EmptyListCard("Titles marked Plan to Watch will appear here automatically.")
+            }
+        } else {
+            items(
+                items = items,
+                key = { item -> "watchlist-${item.mediaType}-${item.tmdbId}" }
+            ) { item ->
+                AutomaticTitlePosterCard(
+                    item = item,
+                    overlayText = if (item.mediaType == "movie") "MOVIE" else "TV",
+                    detailText = item.displayYear.takeIf { year -> year != "—" }
+                        ?: item.displayMediaType,
+                    overlayAccent = Color(0xFFA879FF),
                     onClick = { onItemClick(item) }
                 )
             }
