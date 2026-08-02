@@ -14,9 +14,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         EpisodeWatch::class,
         CustomList::class,
         CustomListItem::class,
-        RewatchRecord::class
+        RewatchRecord::class,
+        ContinueWatchingCache::class
     ],
-    version = 10,
+    version = 11,
     exportSchema = false
 )
 @TypeConverters(
@@ -31,6 +32,8 @@ abstract class WatchTrackerDatabase : RoomDatabase() {
     abstract fun customListDao(): CustomListDao
 
     abstract fun rewatchRecordDao(): RewatchRecordDao
+
+    abstract fun continueWatchingCacheDao(): ContinueWatchingCacheDao
 
     companion object {
 
@@ -165,6 +168,40 @@ abstract class WatchTrackerDatabase : RoomDatabase() {
             }
         }
 
+        private val migration10To11 = object : Migration(10, 11) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS continue_watching_cache (
+                        tmdbShowId INTEGER NOT NULL,
+                        nextEpisodeId INTEGER,
+                        nextEpisodeName TEXT,
+                        nextEpisodeOverview TEXT,
+                        nextSeasonNumber INTEGER,
+                        nextEpisodeNumber INTEGER,
+                        nextAirDate TEXT,
+                        nextRuntimeMinutes INTEGER,
+                        nextStillPath TEXT,
+                        nextVoteAverage REAL,
+                        upcomingEpisodeId INTEGER,
+                        upcomingEpisodeName TEXT,
+                        upcomingEpisodeOverview TEXT,
+                        upcomingSeasonNumber INTEGER,
+                        upcomingEpisodeNumber INTEGER,
+                        upcomingAirDate TEXT,
+                        upcomingRuntimeMinutes INTEGER,
+                        upcomingStillPath TEXT,
+                        upcomingVoteAverage REAL,
+                        productionStatus TEXT NOT NULL,
+                        sourceUpdatedAt INTEGER NOT NULL,
+                        fetchedAt INTEGER NOT NULL,
+                        PRIMARY KEY(tmdbShowId)
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+
         @Volatile
         private var instance: WatchTrackerDatabase? = null
 
@@ -186,7 +223,8 @@ abstract class WatchTrackerDatabase : RoomDatabase() {
                         migration6To7,
                         migration7To8,
                         migration8To9,
-                        migration9To10
+                        migration9To10,
+                        migration10To11
                     )
                     .build()
                     .also { database ->
