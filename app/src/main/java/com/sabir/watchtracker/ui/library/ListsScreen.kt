@@ -895,11 +895,11 @@ private fun HighlyRatedDetail(
             ) { item ->
                 AutomaticTitlePosterCard(
                     item = item,
-                    accentText = "★ ${formatListRating(item.personalRating ?: 0.0)}",
+                    overlayText = "★ ${formatListRating(item.personalRating ?: 0.0)}",
                     detailText = item.watchDateEpochDay?.let { date ->
-                        "Watched ${formatShortEpochDay(date)}"
+                        "Watched ${formatCompactListDate(date)}"
                     } ?: item.displayMediaType,
-                    accent = Color(0xFFFFC857),
+                    overlayAccent = Color(0xFFFFC857),
                     onClick = { onItemClick(item) }
                 )
             }
@@ -950,9 +950,9 @@ private fun RewatchedDetail(
             ) { entry ->
                 AutomaticTitlePosterCard(
                     item = entry.item,
-                    accentText = "${entry.rewatchCount} ${if (entry.rewatchCount == 1) "rewatch" else "rewatches"}",
-                    detailText = "Last ${formatEpochDayForLists(entry.latestRewatchEpochDay)}",
-                    accent = Color(0xFF4D8DFF),
+                    overlayText = "↻ ${entry.rewatchCount}",
+                    detailText = "Last ${formatCompactListDate(entry.latestRewatchEpochDay)}",
+                    overlayAccent = Color(0xFF4D8DFF),
                     onClick = { onItemClick(entry.item) }
                 )
             }
@@ -963,9 +963,9 @@ private fun RewatchedDetail(
 @Composable
 private fun AutomaticTitlePosterCard(
     item: LibraryItem,
-    accentText: String,
+    overlayText: String,
     detailText: String,
-    accent: Color,
+    overlayAccent: Color,
     onClick: () -> Unit
 ) {
     Card(
@@ -974,16 +974,40 @@ private fun AutomaticTitlePosterCard(
         shape = RoundedCornerShape(13.dp)
     ) {
         Column {
-            AsyncImage(
-                model = item.posterUrl,
-                contentDescription = item.title,
-                modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f),
-                contentScale = ContentScale.Crop
-            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(2f / 3f)
+            ) {
+                AsyncImage(
+                    model = item.posterUrl,
+                    contentDescription = item.title,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(7.dp)
+                        .background(
+                            color = Color.Black.copy(alpha = 0.78f),
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                        .padding(horizontal = 7.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = overlayText,
+                        color = overlayAccent,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
+                    )
+                }
+            }
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(84.dp)
+                    .height(66.dp)
                     .padding(8.dp)
             ) {
                 Text(
@@ -997,15 +1021,6 @@ private fun AutomaticTitlePosterCard(
                     lineHeight = 12.sp
                 )
                 Spacer(Modifier.height(4.dp))
-                Text(
-                    accentText,
-                    color = accent,
-                    fontSize = 8.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(Modifier.height(3.dp))
                 Text(
                     detailText,
                     color = ListsMuted,
@@ -1531,6 +1546,9 @@ private fun formatEpochDayForLists(epochDay: Long): String =
 
 private fun formatShortEpochDay(epochDay: Long): String =
     LocalDate.ofEpochDay(epochDay).format(DateTimeFormatter.ofPattern("dd MMM"))
+
+private fun formatCompactListDate(epochDay: Long): String =
+    LocalDate.ofEpochDay(epochDay).format(DateTimeFormatter.ofPattern("dd MMM yy"))
 
 private fun formatListRating(rating: Double): String =
     if (rating % 1.0 == 0.0) {
