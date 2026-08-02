@@ -10,6 +10,7 @@ import com.sabir.watchtracker.data.backup.ReelTickBackupManager
 import com.sabir.watchtracker.data.local.EpisodeWatch
 import com.sabir.watchtracker.data.local.CustomList
 import com.sabir.watchtracker.data.local.CustomListItem
+import com.sabir.watchtracker.data.local.ContinueWatchingCache
 import com.sabir.watchtracker.data.local.LibraryItem
 import com.sabir.watchtracker.data.local.LibraryStatus
 import com.sabir.watchtracker.data.local.RewatchRecord
@@ -20,6 +21,8 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -53,6 +56,7 @@ private data class TvQueueResult(
 
 data class UpNextUiState(
     val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
     val entries: List<UpNextEntry> = emptyList(),
     val upcomingEntries: List<UpcomingEpisodeEntry> = emptyList(),
     val savingShowIds: Set<Int> = emptySet(),
@@ -656,44 +660,83 @@ class LibraryViewModel(
             return
         }
 
-        upNextUiState.value = upNextUiState.value.copy(
-            isLoading = true,
-            errorMessage = null
-        )
-
         upNextJob = coroutineScope.launch {
+            val cacheByShowId = withContext(Dispatchers.IO) {
+                repository.getContinueWatchingCache()
+                    .associateBy { cache -> cache.tmdbShowId }
+            }
+            val cachedResults = shows.mapNotNull { show ->
+                cacheByShowId[show.tmdbId]?.toQueueResult(show)
+            }
+            applyQueueResults(
+                results = cachedResults,
+                isLoading = cachedResults.isEmpty(),
+                isRefreshing = false,
+                errorMessage = null
+            )
+
+            val staleBefore = System.currentTimeMillis() - CACHE_MAX_AGE_MILLIS
+            val showsToRefresh = shows.filter { show ->
+                val cache = cacheByShowId[show.tmdbId]
+                cache == null ||
+                    cache.fetchedAt < staleBefore ||
+                    cache.sourceUpdatedAt != show.updatedAt
+            }
+            if (showsToRefresh.isEmpty()) {
+                upNextUiState.value = upNextUiState.value.copy(
+                    isLoading = false,
+                    isRefreshing = false
+                )
+                return@launch
+            }
+
+            upNextUiState.value = upNextUiState.value.copy(
+                isLoading = cachedResults.isEmpty(),
+                isRefreshing = cachedResults.isNotEmpty(),
+                errorMessage = null
+            )
+
             val attempts = withContext(Dispatchers.IO) {
-                shows.map { show ->
-                    runCatching {
-                        findShowQueue(
-                            show = show,
-                            watchedEpisodes = state.episodeWatches
-                                .filter { watch ->
-                                    watch.tmdbShowId == show.tmdbId
-                                }
-                        )
-                    }
+                kotlinx.coroutines.coroutineScope {
+                    showsToRefresh.map { show ->
+                        async {
+                            runCatching {
+                                val result = findShowQueue(
+                                    show = show,
+                                    watchedEpisodes = state.episodeWatches
+                                        .filter { watch ->
+                                            watch.tmdbShowId == show.tmdbId
+                                        }
+                                )
+                                repository.saveContinueWatchingCache(
+                                    result.toCache(show)
+                                )
+                                show.tmdbId to result
+                            }
+                        }
+                    }.awaitAll()
                 }
             }
 
-            val results = attempts.mapNotNull { attempt -> attempt.getOrNull() }
-            val entries = results.mapNotNull { result -> result.nextAvailable }
-            val upcomingEntries = results
-                .mapNotNull { result -> result.upcoming }
-                .sortedBy { entry -> entry.episode.parsedAirDate }
+            val refreshedByShowId = attempts
+                .mapNotNull { attempt -> attempt.getOrNull() }
+                .toMap()
+            val mergedResults = shows.mapNotNull { show ->
+                refreshedByShowId[show.tmdbId]
+                    ?: cacheByShowId[show.tmdbId]?.toQueueResult(show)
+            }
 
             val failedCount = attempts.count { attempt ->
                 attempt.isFailure
             }
 
-            upNextUiState.value = upNextUiState.value.copy(
+            applyQueueResults(
+                results = mergedResults,
                 isLoading = false,
-                entries = entries,
-                upcomingEntries = upcomingEntries,
+                isRefreshing = false,
                 errorMessage = if (
-                    entries.isEmpty() &&
-                    upcomingEntries.isEmpty() &&
-                    failedCount == shows.size
+                    mergedResults.isEmpty() &&
+                    failedCount == showsToRefresh.size
                 ) {
                     "Unable to load upcoming episodes."
                 } else {
@@ -701,6 +744,23 @@ class LibraryViewModel(
                 }
             )
         }
+    }
+
+    private fun applyQueueResults(
+        results: List<TvQueueResult>,
+        isLoading: Boolean,
+        isRefreshing: Boolean,
+        errorMessage: String?
+    ) {
+        upNextUiState.value = upNextUiState.value.copy(
+            isLoading = isLoading,
+            isRefreshing = isRefreshing,
+            entries = results.mapNotNull { result -> result.nextAvailable },
+            upcomingEntries = results
+                .mapNotNull { result -> result.upcoming }
+                .sortedBy { entry -> entry.episode.parsedAirDate },
+            errorMessage = errorMessage
+        )
     }
 
     private suspend fun findShowQueue(
@@ -715,14 +775,18 @@ class LibraryViewModel(
 
         val allEpisodes = mutableListOf<TmdbEpisode>()
 
-        details.regularSeasons.forEach { seasonSummary ->
-            val season = tmdbRepository.getTvSeasonDetails(
-                seriesId = show.tmdbId,
-                seasonNumber = seasonSummary.seasonNumber
-            )
-
-            allEpisodes += season.episodes
-                .sortedBy { episode -> episode.episodeNumber }
+        val seasons = kotlinx.coroutines.coroutineScope {
+            details.regularSeasons.map { seasonSummary ->
+                async {
+                    tmdbRepository.getTvSeasonDetails(
+                        seriesId = show.tmdbId,
+                        seasonNumber = seasonSummary.seasonNumber
+                    )
+                }
+            }.awaitAll()
+        }
+        seasons.sortedBy { season -> season.seasonNumber }.forEach { season ->
+            allEpisodes += season.episodes.sortedBy { episode -> episode.episodeNumber }
         }
 
         val unwatched = allEpisodes.filter { episode ->
@@ -775,6 +839,8 @@ class LibraryViewModel(
                     episode = entry.episode,
                     watchedDateEpochDay = watchedDateEpochDay
                 )
+                repository.deleteContinueWatchingCache(entry.item.tmdbId)
+                upNextSignature = null
             } catch (exception: Exception) {
                 upNextUiState.value = upNextUiState.value.copy(
                     errorMessage = exception.message
@@ -790,8 +856,83 @@ class LibraryViewModel(
     }
 
     fun retryUpNext() {
-        upNextSignature = null
-        refreshUpNextIfNeeded(uiState.value)
+        coroutineScope.launch {
+            uiState.value.tvQueueCandidates.forEach { show ->
+                repository.deleteContinueWatchingCache(show.tmdbId)
+            }
+            upNextSignature = null
+            refreshUpNextIfNeeded(uiState.value)
+        }
+    }
+
+    private fun ContinueWatchingCache.toQueueResult(show: LibraryItem): TvQueueResult {
+        val next = nextEpisodeId?.let { id ->
+            UpNextEntry(
+                item = show,
+                episode = TmdbEpisode(
+                    id = id,
+                    name = nextEpisodeName.orEmpty(),
+                    overview = nextEpisodeOverview.orEmpty(),
+                    seasonNumber = nextSeasonNumber ?: 0,
+                    episodeNumber = nextEpisodeNumber ?: 0,
+                    airDate = nextAirDate,
+                    runtime = nextRuntimeMinutes,
+                    stillPath = nextStillPath,
+                    voteAverage = nextVoteAverage ?: 0.0
+                )
+            )
+        }
+        val upcoming = upcomingEpisodeId?.let { id ->
+            UpcomingEpisodeEntry(
+                item = show,
+                episode = TmdbEpisode(
+                    id = id,
+                    name = upcomingEpisodeName.orEmpty(),
+                    overview = upcomingEpisodeOverview.orEmpty(),
+                    seasonNumber = upcomingSeasonNumber ?: 0,
+                    episodeNumber = upcomingEpisodeNumber ?: 0,
+                    airDate = upcomingAirDate,
+                    runtime = upcomingRuntimeMinutes,
+                    stillPath = upcomingStillPath,
+                    voteAverage = upcomingVoteAverage ?: 0.0
+                ),
+                productionStatus = productionStatus
+            )
+        }
+        return TvQueueResult(nextAvailable = next, upcoming = upcoming)
+    }
+
+    private fun TvQueueResult.toCache(show: LibraryItem): ContinueWatchingCache {
+        val next = nextAvailable?.episode
+        val upcomingEpisode = upcoming?.episode
+        return ContinueWatchingCache(
+            tmdbShowId = show.tmdbId,
+            nextEpisodeId = next?.id,
+            nextEpisodeName = next?.name,
+            nextEpisodeOverview = next?.overview,
+            nextSeasonNumber = next?.seasonNumber,
+            nextEpisodeNumber = next?.episodeNumber,
+            nextAirDate = next?.airDate,
+            nextRuntimeMinutes = next?.runtime,
+            nextStillPath = next?.stillPath,
+            nextVoteAverage = next?.voteAverage,
+            upcomingEpisodeId = upcomingEpisode?.id,
+            upcomingEpisodeName = upcomingEpisode?.name,
+            upcomingEpisodeOverview = upcomingEpisode?.overview,
+            upcomingSeasonNumber = upcomingEpisode?.seasonNumber,
+            upcomingEpisodeNumber = upcomingEpisode?.episodeNumber,
+            upcomingAirDate = upcomingEpisode?.airDate,
+            upcomingRuntimeMinutes = upcomingEpisode?.runtime,
+            upcomingStillPath = upcomingEpisode?.stillPath,
+            upcomingVoteAverage = upcomingEpisode?.voteAverage,
+            productionStatus = upcoming?.productionStatus.orEmpty(),
+            sourceUpdatedAt = show.updatedAt,
+            fetchedAt = System.currentTimeMillis()
+        )
+    }
+
+    companion object {
+        private const val CACHE_MAX_AGE_MILLIS = 12L * 60L * 60L * 1000L
     }
 
     fun createCustomList(
