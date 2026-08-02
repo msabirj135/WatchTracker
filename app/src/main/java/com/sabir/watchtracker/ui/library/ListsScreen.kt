@@ -36,6 +36,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,8 +50,11 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.sabir.watchtracker.data.local.CustomList
 import com.sabir.watchtracker.data.local.LibraryItem
+import com.sabir.watchtracker.data.remote.TmdbSearchResult
+import com.sabir.watchtracker.data.repository.TmdbRepository
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.launch
 
 private val ListsBackground = Color(0xFF090B10)
 private val ListsSurface = Color(0xFF12151D)
@@ -109,6 +113,7 @@ fun ListsScreen(
     onDuplicateList: (CustomList) -> Unit,
     onDeleteList: (Long) -> Unit,
     onAddItem: (Long, LibraryItem) -> Unit,
+    onAddSearchResult: (Long, TmdbSearchResult) -> Unit,
     onRemoveItem: (Long, LibraryItem) -> Unit,
     onItemClick: (LibraryItem) -> Unit
 ) {
@@ -293,6 +298,7 @@ fun ListsScreen(
             selectedItems = state.itemsForList(selectedList!!.id),
             onDismiss = { showAddTitles = false },
             onAdd = { onAddItem(selectedList!!.id, it) },
+            onAddSearchResult = { onAddSearchResult(selectedList!!.id, it) },
             onRemove = { onRemoveItem(selectedList!!.id, it) }
         )
     }
@@ -338,10 +344,12 @@ private fun ListsOverview(
                     Text("Lists", color = ListsText, fontSize = 28.sp, fontWeight = FontWeight.Bold)
                     Text("Monthly history and your collections", color = ListsMuted, fontSize = 13.sp)
                 }
-                Button(
-                    onClick = onNewList,
-                    colors = ButtonDefaults.buttonColors(containerColor = ListsPrimary)
-                ) { Text("+ New") }
+                if (selectedSection == ListsOverviewSection.MY_LISTS) {
+                    Button(
+                        onClick = onNewList,
+                        colors = ButtonDefaults.buttonColors(containerColor = ListsPrimary)
+                    ) { Text("+ New") }
+                }
             }
         }
 
@@ -1472,10 +1480,17 @@ private fun TitlePickerDialog(
     selectedItems: List<LibraryItem>,
     onDismiss: () -> Unit,
     onAdd: (LibraryItem) -> Unit,
+    onAddSearchResult: (TmdbSearchResult) -> Unit,
     onRemove: (LibraryItem) -> Unit
 ) {
     var query by remember { mutableStateOf("") }
     var mediaFilter by remember { mutableStateOf("all") }
+    var source by remember { mutableStateOf("library") }
+    var searchResults by remember { mutableStateOf<List<TmdbSearchResult>>(emptyList()) }
+    var isSearching by remember { mutableStateOf(false) }
+    var searchError by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    val tmdbRepository = remember { TmdbRepository() }
     val selectedKeys = selectedItems.map { it.tmdbId to it.mediaType }.toSet()
     val visibleItems = allItems.filter { item ->
         (mediaFilter == "all" || item.mediaType == mediaFilter) &&
@@ -1486,13 +1501,52 @@ private fun TitlePickerDialog(
         title = { Text("Add titles") },
         text = {
             Column {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = source == "library",
+                        onClick = { source = "library" },
+                        label = { Text("My Library") }
+                    )
+                    FilterChip(
+                        selected = source == "tmdb",
+                        onClick = { source = "tmdb" },
+                        label = { Text("Search TMDB") }
+                    )
+                }
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Search your library") },
+                    label = { Text(if (source == "library") "Search your library" else "Title, year or IMDb ID") },
                     singleLine = true
                 )
+                if (source == "tmdb") {
+                    Button(
+                        onClick = {
+                            if (query.isNotBlank() && !isSearching) {
+                                scope.launch {
+                                    isSearching = true
+                                    searchError = null
+                                    try {
+                                        searchResults = tmdbRepository.searchMoviesAndShows(query)
+                                    } catch (_: Exception) {
+                                        searchError = "Search failed. Check your connection and try again."
+                                    } finally {
+                                        isSearching = false
+                                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = query.isNotBlank() && !isSearching,
+                        colors = ButtonDefaults.buttonColors(containerColor = ListsPrimary)
+                    ) {
+                        Text(if (isSearching) "Searching…" else "Search")
+                    }
+                    searchError?.let { message ->
+                        Text(message, color = ListsPrimary, fontSize = 12.sp)
+                    }
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     listOf("all" to "All", "movie" to "Movies", "tv" to "TV").forEach { filter ->
                         TextButton(onClick = { mediaFilter = filter.first }) {
@@ -1508,30 +1562,81 @@ private fun TitlePickerDialog(
                     modifier = Modifier.height(350.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    columnItems(visibleItems, key = { "pick-${it.mediaType}-${it.tmdbId}" }) { item ->
-                    val selected = (item.tmdbId to item.mediaType) in selectedKeys
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            item.title,
-                            modifier = Modifier.weight(1f),
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        TextButton(onClick = { if (selected) onRemove(item) else onAdd(item) }) {
-                            Text(if (selected) "Remove" else "Add")
+                    if (source == "library") {
+                        columnItems(
+                            visibleItems,
+                            key = { "pick-${it.mediaType}-${it.tmdbId}" }
+                        ) { item ->
+                            val selected = (item.tmdbId to item.mediaType) in selectedKeys
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    item.title,
+                                    modifier = Modifier.weight(1f),
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                TextButton(
+                                    onClick = {
+                                        if (selected) onRemove(item) else onAdd(item)
+                                    }
+                                ) {
+                                    Text(if (selected) "Remove" else "Add")
+                                }
+                            }
                         }
-                    }
-                }
-                    if (visibleItems.isEmpty()) {
-                        item {
-                            Text(
-                                "No matching titles",
-                                modifier = Modifier.fillMaxWidth().padding(20.dp),
-                                color = ListsMuted
-                            )
+                        if (visibleItems.isEmpty()) {
+                            item {
+                                Text(
+                                    "No matching titles",
+                                    modifier = Modifier.fillMaxWidth().padding(20.dp),
+                                    color = ListsMuted
+                                )
+                            }
+                        }
+                    } else {
+                        val filteredResults = searchResults.filter { result ->
+                            mediaFilter == "all" || result.mediaType == mediaFilter
+                        }
+                        columnItems(filteredResults, key = { "tmdb-${it.mediaType}-${it.id}" }) { result ->
+                            val mediaType = result.mediaType.orEmpty()
+                            val selected = (result.id to mediaType) in selectedKeys
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                AsyncImage(
+                                    model = result.posterUrl,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(42.dp, 62.dp).clip(RoundedCornerShape(6.dp)),
+                                    contentScale = ContentScale.Crop
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(result.displayTitle, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    Text(
+                                        "${result.displayMediaType} • ${result.displayYear}",
+                                        color = ListsMuted,
+                                        fontSize = 12.sp
+                                    )
+                                }
+                                TextButton(
+                                    onClick = {
+                                        if (selected) {
+                                            selectedItems.firstOrNull {
+                                                it.tmdbId == result.id && it.mediaType == mediaType
+                                            }?.let(onRemove)
+                                        } else {
+                                            onAddSearchResult(result)
+                                        }
+                                    }
+                                ) { Text(if (selected) "Remove" else "Add") }
+                            }
+                        }
+                        if (!isSearching && query.isNotBlank() && filteredResults.isEmpty() && searchError == null) {
+                            item { Text("No matching TMDB titles", color = ListsMuted, modifier = Modifier.padding(20.dp)) }
                         }
                     }
                 }
