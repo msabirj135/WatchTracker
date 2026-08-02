@@ -103,7 +103,40 @@ class LibraryRepository(
                 listId = listId,
                 tmdbId = item.tmdbId,
                 mediaType = item.mediaType,
-                addedAt = System.currentTimeMillis()
+                addedAt = System.currentTimeMillis(),
+                title = item.title,
+                overview = item.overview,
+                posterPath = item.posterPath,
+                backdropPath = item.backdropPath,
+                releaseDate = item.releaseDate,
+                originalTitle = item.originalTitle,
+                originalLanguage = item.originalLanguage,
+                tmdbRating = item.tmdbRating
+            )
+        )
+    }
+
+    suspend fun addSearchResultToCustomList(
+        listId: Long,
+        result: TmdbSearchResult
+    ) {
+        val mediaType = result.mediaType
+            ?.takeIf { it == "movie" || it == "tv" }
+            ?: return
+        customListDao.upsertItem(
+            CustomListItem(
+                listId = listId,
+                tmdbId = result.id,
+                mediaType = mediaType,
+                addedAt = System.currentTimeMillis(),
+                title = result.displayTitle,
+                overview = result.overview,
+                posterPath = result.posterPath,
+                backdropPath = result.backdropPath,
+                releaseDate = result.displayDate,
+                originalTitle = result.originalTitle,
+                originalLanguage = result.originalLanguage,
+                tmdbRating = result.voteAverage
             )
         )
     }
