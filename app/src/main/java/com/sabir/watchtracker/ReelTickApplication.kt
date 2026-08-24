@@ -26,6 +26,16 @@ class ReelTickApplication : Application(), DefaultLifecycleObserver {
     override fun onCreate() {
         super<Application>.onCreate()
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
+
+        // Create a fresh safety snapshot when ReelTick starts. This guarantees
+        // the safety backup is refreshed even if the process was previously
+        // killed without delivering the lifecycle stop callback.
+        createAutomaticSafetyBackup()
+    }
+
+    override fun onStart(owner: LifecycleOwner) {
+        super<DefaultLifecycleObserver>.onStart(owner)
+        createAutomaticSafetyBackup()
     }
 
     override fun onStop(owner: LifecycleOwner) {
