@@ -1987,7 +1987,7 @@ private fun TheatreStatisticsCard(state: LibraryUiState) {
                 )
                 AnnualMetric(
                     modifier = Modifier.weight(1f),
-                    value = formatWatchTime(state.theatreWatchMinutes),
+                    value = formatWatchHours(state.theatreWatchMinutes),
                     label = "Watch time"
                 )
             }
@@ -2171,7 +2171,7 @@ private fun AnnualSummaryCard(summary: AdvancedYearSummary) {
                 )
                 AnnualMetric(
                     modifier = Modifier.weight(1f),
-                    value = formatWatchTime(summary.totalMinutes),
+                    value = formatWatchHours(summary.totalMinutes),
                     label = "Watch time"
                 )
             }
