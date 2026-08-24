@@ -32,10 +32,14 @@ jobs:
                   'value = formatWatchHours(summary.totalMinutes),',
           }
 
+          changed = False
           for old, new in replacements.items():
-              if old not in text:
-                  raise SystemExit(f'Missing expected text: {old}')
-              text = text.replace(old, new, 1)
+              if old in text:
+                  text = text.replace(old, new, 1)
+                  changed = True
+
+          if not changed:
+              raise SystemExit('Stats watch-time formatting is already fixed.')
 
           path.write_text(text, encoding='utf-8-sig', newline='')
           PY
