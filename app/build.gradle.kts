@@ -117,3 +117,212 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
+
+// One-time source migration for the theatre statistics fix.
+// It runs before Kotlin compilation and is idempotent.
+val fixTheatreStatisticsSource by tasks.registering {
+    doLast {
+        val sourceFile = file("src/main/java/com/sabir/watchtracker/ui/library/LibraryScreens.kt")
+        var source = sourceFile.readText()
+
+        val oldSection = """        if (libraryUiState.theatreWatchEntries.isNotEmpty()) {
+            item { TheatreStatisticsCard(libraryUiState) }
+        }
+
+        item {
+            StatisticsYearSelector(
+                years = availableYears,
+                selectedYear = selectedYear,
+                onYearSelected = { year -> selectedYear = year }
+            )
+        }
+"""
+
+        val newSection = """        item {
+            StatisticsYearSelector(
+                years = availableYears,
+                selectedYear = selectedYear,
+                onYearSelected = { year -> selectedYear = year }
+            )
+        }
+
+        if (libraryUiState.theatreWatchEntries.isNotEmpty()) {
+            item {
+                TheatreStatisticsCard(
+                    state = libraryUiState,
+                    selectedYear = selectedYear
+                )
+            }
+        }
+"""
+
+        if (source.contains(oldSection)) {
+            source = source.replace(oldSection, newSection)
+        }
+
+        val oldFunction = """@Composable
+private fun TheatreStatisticsCard(state: LibraryUiState) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = ScreenSurface)
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(46.dp)
+                        .background(
+                            ScreenPrimary.copy(alpha = 0.14f),
+                            RoundedCornerShape(14.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(text = "🎟", fontSize = 21.sp)
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column {
+                    Text(
+                        text = "Theatre watches",
+                        color = ScreenTextPrimary,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Your movies watched on the big screen",
+                        color = ScreenTextSecondary,
+                        fontSize = 10.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                AnnualMetric(
+                    modifier = Modifier.weight(1f),
+                    value = state.theatreWatchEntries.size.toString(),
+                    label = "Movies"
+                )
+                AnnualMetric(
+                    modifier = Modifier.weight(1f),
+                    value = state.theatreMoviesThisYear.toString(),
+                    label = "This year"
+                )
+                AnnualMetric(
+                    modifier = Modifier.weight(1f),
+                    value = formatWatchHours(state.theatreWatchMinutes),
+                    label = "Watch time"
+                )
+            }
+        }
+    }
+}
+"""
+
+        val newFunction = """@Composable
+private fun TheatreStatisticsCard(
+    state: LibraryUiState,
+    selectedYear: Int
+) {
+    val yearVisits = state.theatreWatchEntries
+        .flatMap { entry ->
+            entry.visitDates.map { date -> entry.item to date }
+        }
+        .filter { (_, date) ->
+            LocalDate.ofEpochDay(date).year == selectedYear
+        }
+
+    val movieCount = yearVisits
+        .map { (item, _) -> item.mediaType to item.tmdbId }
+        .distinct()
+        .size
+
+    val watchMinutes = yearVisits.sumOf { (item, _) ->
+        item.runtimeMinutes ?: 0
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = ScreenSurface)
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(46.dp)
+                        .background(
+                            ScreenPrimary.copy(alpha = 0.14f),
+                            RoundedCornerShape(14.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(text = "🎟", fontSize = 21.sp)
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column {
+                    Text(
+                        text = "Theatre watches",
+                        color = ScreenTextPrimary,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Movies watched in $selectedYear",
+                        color = ScreenTextSecondary,
+                        fontSize = 10.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                AnnualMetric(
+                    modifier = Modifier.weight(1f),
+                    value = movieCount.toString(),
+                    label = "Movies"
+                )
+                AnnualMetric(
+                    modifier = Modifier.weight(1f),
+                    value = yearVisits.size.toString(),
+                    label = "Watches"
+                )
+                AnnualMetric(
+                    modifier = Modifier.weight(1f),
+                    value = formatWatchHours(watchMinutes),
+                    label = "Watch time"
+                )
+            }
+        }
+    }
+}
+"""
+
+        if (source.contains(oldFunction)) {
+            source = source.replace(oldFunction, newFunction)
+            sourceFile.writeText(source)
+        }
+    }
+}
+
+tasks.matching { it.name == "preBuild" }.configureEach {
+    dependsOn(fixTheatreStatisticsSource)
+}
