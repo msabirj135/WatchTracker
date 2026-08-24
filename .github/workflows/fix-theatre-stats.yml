@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   fix:
+    if: "!contains(github.event.head_commit.message, 'Fix theatre stats year filtering')"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -26,17 +27,43 @@ jobs:
           path = Path("app/src/main/java/com/sabir/watchtracker/ui/library/LibraryScreens.kt")
           text = path.read_text(encoding="utf-8-sig")
 
-          old = '''        if (libraryUiState.theatreWatchEntries.isNotEmpty()) {
+          # Put the theatre section after the year selector so the selected year
+          # is the single source of truth for all year-specific statistics.
+          old_call = '''        if (libraryUiState.theatreWatchEntries.isNotEmpty()) {
             item { TheatreStatisticsCard(libraryUiState) }
         }
+
+        item {
+            StatisticsYearSelector(
 '''
-          new = '''        if (libraryUiState.theatreWatchEntries.isNotEmpty()) {
-            item { TheatreStatisticsCard(libraryUiState, selectedYear) }
+          new_call = '''        item {
+            StatisticsYearSelector(
+'''
+          if old_call in text:
+              text = text.replace(old_call, new_call, 1)
+
+          old_selector_end = '''            )
         }
+
+        item { AnnualSummaryCard(yearSummary) }
 '''
-          if old not in text:
-              raise SystemExit("Theatre statistics call pattern was not found")
-          text = text.replace(old, new, 1)
+          new_selector_end = '''            )
+        }
+
+        if (libraryUiState.theatreWatchEntries.isNotEmpty()) {
+            item {
+                TheatreStatisticsCard(
+                    state = libraryUiState,
+                    selectedYear = selectedYear
+                )
+            }
+        }
+
+        item { AnnualSummaryCard(yearSummary) }
+'''
+          if old_selector_end not in text:
+              raise SystemExit("Statistics year selector ending was not found")
+          text = text.replace(old_selector_end, new_selector_end, 1)
 
           old_card = '''private fun TheatreStatisticsCard(state: LibraryUiState) {
     Card(
@@ -52,19 +79,22 @@ jobs:
             entry.item to epochDay
         }
     }
+
     val theatreMovieCount = theatreDatesForYear
         .map { (item, _) -> item.mediaType to item.tmdbId }
         .distinct()
         .size
+
     val theatreWatchMinutes = theatreDatesForYear.sumOf { (item, _) ->
         item.runtimeMinutes ?: 0
     }
 
     Card(
 '''
-          if old_card not in text:
+          if old_card in text:
+              text = text.replace(old_card, new_card, 1)
+          elif 'private fun TheatreStatisticsCard(\n    state: LibraryUiState,\n    selectedYear: Int\n)' not in text:
               raise SystemExit("TheatreStatisticsCard declaration was not found")
-          text = text.replace(old_card, new_card, 1)
 
           old_metrics = '''                AnnualMetric(
                     modifier = Modifier.weight(1f),
@@ -93,9 +123,13 @@ jobs:
                     label = "Watch time"
                 )
 '''
-          if old_metrics not in text:
-              raise SystemExit("Theatre statistics metrics block was not found")
-          text = text.replace(old_metrics, new_metrics, 1)
+          if old_metrics in text:
+              text = text.replace(old_metrics, new_metrics, 1)
+
+          # Guard against the previous partial fix: there must be no separate
+          # "This year" metric left in the theatre card.
+          if 'label = "This year"' in text:
+              raise SystemExit("Theatre 'This year' metric is still present")
 
           path.write_text(text, encoding="utf-8")
           PY
