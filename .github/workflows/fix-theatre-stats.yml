@@ -1,0 +1,113 @@
+name: Fix Theatre Statistics
+
+on:
+  push:
+    branches:
+      - agent/improve-stats-watch-time
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: agent/improve-stats-watch-time
+          fetch-depth: 0
+
+      - name: Apply theatre statistics fix
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("app/src/main/java/com/sabir/watchtracker/ui/library/LibraryScreens.kt")
+          text = path.read_text(encoding="utf-8-sig")
+
+          old = '''        if (libraryUiState.theatreWatchEntries.isNotEmpty()) {
+            item { TheatreStatisticsCard(libraryUiState) }
+        }
+'''
+          new = '''        if (libraryUiState.theatreWatchEntries.isNotEmpty()) {
+            item { TheatreStatisticsCard(libraryUiState, selectedYear) }
+        }
+'''
+          if old not in text:
+              raise SystemExit("Theatre statistics call pattern was not found")
+          text = text.replace(old, new, 1)
+
+          old_card = '''private fun TheatreStatisticsCard(state: LibraryUiState) {
+    Card(
+'''
+          new_card = '''private fun TheatreStatisticsCard(
+    state: LibraryUiState,
+    selectedYear: Int
+) {
+    val theatreDatesForYear = state.theatreWatchEntries.flatMap { entry ->
+        entry.visitDates.filter { epochDay ->
+            LocalDate.ofEpochDay(epochDay).year == selectedYear
+        }.map { epochDay ->
+            entry.item to epochDay
+        }
+    }
+    val theatreMovieCount = theatreDatesForYear
+        .map { (item, _) -> item.mediaType to item.tmdbId }
+        .distinct()
+        .size
+    val theatreWatchMinutes = theatreDatesForYear.sumOf { (item, _) ->
+        item.runtimeMinutes ?: 0
+    }
+
+    Card(
+'''
+          if old_card not in text:
+              raise SystemExit("TheatreStatisticsCard declaration was not found")
+          text = text.replace(old_card, new_card, 1)
+
+          old_metrics = '''                AnnualMetric(
+                    modifier = Modifier.weight(1f),
+                    value = state.theatreWatchEntries.size.toString(),
+                    label = "Movies"
+                )
+                AnnualMetric(
+                    modifier = Modifier.weight(1f),
+                    value = state.theatreMoviesThisYear.toString(),
+                    label = "This year"
+                )
+                AnnualMetric(
+                    modifier = Modifier.weight(1f),
+                    value = formatWatchHours(state.theatreWatchMinutes),
+                    label = "Watch time"
+                )
+'''
+          new_metrics = '''                AnnualMetric(
+                    modifier = Modifier.weight(1f),
+                    value = theatreMovieCount.toString(),
+                    label = "Movies"
+                )
+                AnnualMetric(
+                    modifier = Modifier.weight(1f),
+                    value = formatWatchHours(theatreWatchMinutes),
+                    label = "Watch time"
+                )
+'''
+          if old_metrics not in text:
+              raise SystemExit("Theatre statistics metrics block was not found")
+          text = text.replace(old_metrics, new_metrics, 1)
+
+          path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/sabir/watchtracker/ui/library/LibraryScreens.kt
+          if git diff --cached --quiet; then
+            echo "No changes needed"
+            exit 0
+          fi
+          git commit -m "Fix theatre stats year filtering"
+          git push origin agent/improve-stats-watch-time
