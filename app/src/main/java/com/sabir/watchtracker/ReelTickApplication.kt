@@ -29,7 +29,6 @@ class ReelTickApplication : Application(), DefaultLifecycleObserver {
     }
 
     override fun onStop(owner: LifecycleOwner) {
-        super<DefaultLifecycleObserver>.onStop(owner)
         createAutomaticSafetyBackup()
     }
 
