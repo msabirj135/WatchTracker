@@ -1,0 +1,98 @@
+name: Apply Theatre Year Fix
+
+on:
+  push:
+    branches:
+      - agent/improve-stats-watch-time
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update Theatre statistics
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('app/src/main/java/com/sabir/watchtracker/ui/library/LibraryScreens.kt')
+          s = p.read_text(encoding='utf-8-sig')
+
+          old = '''        if (libraryUiState.theatreWatchEntries.isNotEmpty()) {
+            item { TheatreStatisticsCard(libraryUiState) }
+        }
+'''
+          new = '''        if (libraryUiState.theatreWatchEntries.isNotEmpty()) {
+            item { TheatreStatisticsCard(libraryUiState, selectedYear) }
+        }
+'''
+          if old not in s:
+              raise SystemExit('Theatre card call not found')
+          s = s.replace(old, new, 1)
+
+          old = '''private fun TheatreStatisticsCard(state: LibraryUiState) {
+'''
+          new = '''private fun TheatreStatisticsCard(state: LibraryUiState, selectedYear: Int) {
+    val selectedYearVisits = state.theatreWatchEntries.flatMap { entry ->
+        entry.visitDates
+            .filter { date -> LocalDate.ofEpochDay(date).year == selectedYear }
+            .map { date -> entry.item to date }
+    }
+    val selectedYearMovies = selectedYearVisits
+        .map { (item, _) -> item.mediaType to item.tmdbId }
+        .distinct()
+        .size
+    val selectedYearMinutes = selectedYearVisits.sumOf { (item, _) ->
+        item.runtimeMinutes ?: 0
+    }
+'''
+          if old not in s:
+              raise SystemExit('Theatre function not found')
+          s = s.replace(old, new, 1)
+
+          old = '''                AnnualMetric(
+                    modifier = Modifier.weight(1f),
+                    value = state.theatreWatchEntries.size.toString(),
+                    label = "Movies"
+                )
+                AnnualMetric(
+                    modifier = Modifier.weight(1f),
+                    value = state.theatreMoviesThisYear.toString(),
+                    label = "This year"
+                )
+                AnnualMetric(
+                    modifier = Modifier.weight(1f),
+                    value = formatWatchHours(state.theatreWatchMinutes),
+                    label = "Watch time"
+                )
+'''
+          new = '''                AnnualMetric(
+                    modifier = Modifier.weight(1f),
+                    value = selectedYearMovies.toString(),
+                    label = "Movies"
+                )
+                AnnualMetric(
+                    modifier = Modifier.weight(1f),
+                    value = formatWatchHours(selectedYearMinutes),
+                    label = "Watch time"
+                )
+'''
+          if old not in s:
+              raise SystemExit('Theatre metrics block not found')
+          s = s.replace(old, new, 1)
+
+          p.write_text(s, encoding='utf-8-sig', newline='')
+          PY
+      - name: Commit
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/src/main/java/com/sabir/watchtracker/ui/library/LibraryScreens.kt
+          git diff --cached --quiet && exit 0
+          git commit -m 'Make Theatre stats follow selected year'
+          git push
