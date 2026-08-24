@@ -27,8 +27,6 @@ jobs:
           path = Path("app/src/main/java/com/sabir/watchtracker/ui/library/LibraryScreens.kt")
           text = path.read_text(encoding="utf-8-sig")
 
-          # Put the theatre section after the year selector so the selected year
-          # is the single source of truth for all year-specific statistics.
           old_call = '''        if (libraryUiState.theatreWatchEntries.isNotEmpty()) {
             item { TheatreStatisticsCard(libraryUiState) }
         }
@@ -126,8 +124,6 @@ jobs:
           if old_metrics in text:
               text = text.replace(old_metrics, new_metrics, 1)
 
-          # Guard against the previous partial fix: there must be no separate
-          # "This year" metric left in the theatre card.
           if 'label = "This year"' in text:
               raise SystemExit("Theatre 'This year' metric is still present")
 
