@@ -1,6 +1,27 @@
 package com.sabir.watchtracker.data.remote
 
 import com.google.gson.annotations.SerializedName
+import com.sabir.watchtracker.BuildConfig
+import java.util.Locale
+
+data class TmdbMovieDetails(
+    @SerializedName("id")
+    val id: Int,
+
+    @SerializedName("runtime")
+    val runtime: Int? = null,
+
+    @SerializedName("genres")
+    val genres: List<TmdbGenre> = emptyList()
+)
+
+data class TmdbGenre(
+    @SerializedName("id")
+    val id: Int,
+
+    @SerializedName("name")
+    val name: String
+)
 
 data class TmdbSearchResponse(
     @SerializedName("page")
@@ -14,6 +35,14 @@ data class TmdbSearchResponse(
 
     @SerializedName("total_results")
     val totalResults: Int = 0
+)
+
+data class TmdbFindResponse(
+    @SerializedName("movie_results")
+    val movieResults: List<TmdbSearchResult> = emptyList(),
+
+    @SerializedName("tv_results")
+    val tvResults: List<TmdbSearchResult> = emptyList()
 )
 
 data class TmdbSearchResult(
@@ -35,6 +64,9 @@ data class TmdbSearchResult(
     @SerializedName("original_name")
     val originalShowTitle: String? = null,
 
+    @SerializedName("original_language")
+    val originalLanguage: String? = null,
+
     @SerializedName("overview")
     val overview: String = "",
 
@@ -51,7 +83,10 @@ data class TmdbSearchResult(
     val firstAirDate: String? = null,
 
     @SerializedName("vote_average")
-    val voteAverage: Double = 0.0
+    val voteAverage: Double = 0.0,
+
+    @SerializedName("genre_ids")
+    val genreIds: List<Int> = emptyList()
 ) {
     val displayTitle: String
         get() = movieTitle
@@ -59,6 +94,34 @@ data class TmdbSearchResult(
             ?: originalMovieTitle
             ?: originalShowTitle
             ?: "Untitled"
+
+    val originalTitle: String?
+        get() = (originalMovieTitle ?: originalShowTitle)
+            ?.trim()
+            ?.takeIf { title ->
+                title.isNotBlank() &&
+                    !title.equals(displayTitle, ignoreCase = true)
+            }
+
+    val displayLanguage: String
+        get() {
+            val code = originalLanguage
+                ?.trim()
+                ?.lowercase()
+                ?.takeIf { it.isNotBlank() }
+                ?: return "Unknown language"
+
+            return Locale.forLanguageTag(code)
+                .getDisplayLanguage(Locale.ENGLISH)
+                .takeIf { name ->
+                    name.isNotBlank() &&
+                        !name.equals(code, ignoreCase = true)
+                }
+                ?.replaceFirstChar { character ->
+                    character.titlecase(Locale.ENGLISH)
+                }
+                ?: code.uppercase(Locale.ENGLISH)
+        }
 
     val displayDate: String
         get() = movieReleaseDate
@@ -82,11 +145,11 @@ data class TmdbSearchResult(
 
     val posterUrl: String?
         get() = posterPath?.let { path ->
-            "https://image.tmdb.org/t/p/w500$path"
+            "${BuildConfig.TMDB_PROXY_BASE_URL.trimEnd('/')}/image/t/p/w500$path"
         }
 
     val backdropUrl: String?
         get() = backdropPath?.let { path ->
-            "https://image.tmdb.org/t/p/w780$path"
+            "${BuildConfig.TMDB_PROXY_BASE_URL.trimEnd('/')}/image/t/p/w780$path"
         }
 }

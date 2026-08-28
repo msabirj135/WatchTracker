@@ -18,6 +18,14 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
 
+enum class SearchMediaFilter(
+    val label: String
+) {
+    ALL("All"),
+    MOVIES("Movies"),
+    TV_SHOWS("TV Shows")
+}
+
 data class SearchUiState(
     val query: String = "",
     val isLoading: Boolean = false,
@@ -32,8 +40,53 @@ data class SearchUiState(
     val seasonDetails: TmdbSeasonDetails? = null,
     val isLoadingTvDetails: Boolean = false,
     val isLoadingSeason: Boolean = false,
-    val tvDetailsErrorMessage: String? = null
-)
+    val tvDetailsErrorMessage: String? = null,
+    val mediaFilter: SearchMediaFilter = SearchMediaFilter.ALL,
+    val yearFilter: Int? = null,
+    val languageFilter: String? = null,
+    val recentSearches: List<String> = emptyList(),
+    val savedItemKeys: Set<String> = emptySet()
+) {
+    val availableYears: List<Int>
+        get() = results
+            .mapNotNull { result ->
+                result.displayYear.toIntOrNull()
+            }
+            .distinct()
+            .sortedDescending()
+
+    val availableLanguages: List<Pair<String, String>>
+        get() = results
+            .mapNotNull { result ->
+                result.originalLanguage
+                    ?.trim()
+                    ?.lowercase()
+                    ?.takeIf { code -> code.isNotBlank() }
+                    ?.let { code -> code to result.displayLanguage }
+            }
+            .distinctBy { (code, _) -> code }
+            .sortedBy { (_, name) -> name }
+
+    val filteredResults: List<TmdbSearchResult>
+        get() = results.filter { result ->
+            val matchesMediaType = when (mediaFilter) {
+                SearchMediaFilter.ALL -> true
+                SearchMediaFilter.MOVIES -> result.mediaType == "movie"
+                SearchMediaFilter.TV_SHOWS -> result.mediaType == "tv"
+            }
+
+            val matchesYear = yearFilter == null ||
+                result.displayYear.toIntOrNull() == yearFilter
+
+            val matchesLanguage = languageFilter == null ||
+                result.originalLanguage.equals(
+                    languageFilter,
+                    ignoreCase = true
+                )
+
+            matchesMediaType && matchesYear && matchesLanguage
+        }
+}
 
 class SearchViewModel(
     application: Application
@@ -43,6 +96,11 @@ class SearchViewModel(
 
     private val libraryRepository = LibraryRepository(
         context = application.applicationContext
+    )
+
+    private val preferences = application.getSharedPreferences(
+        "reeltick_search",
+        android.content.Context.MODE_PRIVATE
     )
 
     private val coroutineScope = CoroutineScope(
@@ -55,9 +113,23 @@ class SearchViewModel(
     private var seasonJob: Job? = null
 
     var uiState = androidx.compose.runtime.mutableStateOf(
-        SearchUiState()
+        SearchUiState(
+            recentSearches = loadRecentSearches()
+        )
     )
         private set
+
+    init {
+        coroutineScope.launch {
+            libraryRepository.observeAll().collect { items ->
+                uiState.value = uiState.value.copy(
+                    savedItemKeys = items.map { item ->
+                        "${item.mediaType}-${item.tmdbId}"
+                    }.toSet()
+                )
+            }
+        }
+    }
 
     fun updateQuery(
         query: String
@@ -86,7 +158,9 @@ class SearchViewModel(
         uiState.value = uiState.value.copy(
             isLoading = true,
             errorMessage = null,
-            hasSearched = true
+            hasSearched = true,
+            yearFilter = null,
+            languageFilter = null
         )
 
         searchJob = coroutineScope.launch {
@@ -94,15 +168,18 @@ class SearchViewModel(
                 val results = tmdbRepository
                     .searchMoviesAndShows(query)
 
+                saveRecentSearch(query)
+
                 uiState.value = uiState.value.copy(
                     isLoading = false,
                     results = results,
-                    errorMessage = null
+                    errorMessage = null,
+                    recentSearches = loadRecentSearches()
                 )
             } catch (exception: HttpException) {
                 val message = when (exception.code()) {
                     401 -> {
-                        "TMDB rejected the access token. Check local.properties."
+                        "ReelTick proxy authentication failed. Check the app key configuration."
                     }
 
                     404 -> {
@@ -138,6 +215,37 @@ class SearchViewModel(
                 )
             }
         }
+    }
+
+    fun searchRecent(query: String) {
+        updateQuery(query)
+        search()
+    }
+
+    fun updateMediaFilter(filter: SearchMediaFilter) {
+        uiState.value = uiState.value.copy(
+            mediaFilter = filter
+        )
+    }
+
+    fun updateYearFilter(year: Int?) {
+        uiState.value = uiState.value.copy(
+            yearFilter = year
+        )
+    }
+
+    fun updateLanguageFilter(languageCode: String?) {
+        uiState.value = uiState.value.copy(
+            languageFilter = languageCode
+        )
+    }
+
+    fun clearResultFilters() {
+        uiState.value = uiState.value.copy(
+            mediaFilter = SearchMediaFilter.ALL,
+            yearFilter = null,
+            languageFilter = null
+        )
     }
 
     fun prepareResult(
@@ -238,7 +346,7 @@ class SearchViewModel(
         status: LibraryStatus,
         watchDateEpochDay: Long?,
         personalRating: Double?,
-        notes: String,
+        watchMethod: String?,
         selectedEpisode: TmdbEpisode?
     ) {
         if (uiState.value.isSaving) {
@@ -256,12 +364,20 @@ class SearchViewModel(
 
         saveJob = coroutineScope.launch {
             try {
+                val movieRuntime = if (result.mediaType == "movie") {
+                    tmdbRepository
+                        .getMovieDetails(result.id)
+                        .runtime
+                } else {
+                    null
+                }
+
                 libraryRepository.saveSearchResult(
                     result = result,
                     status = status,
                     watchDateEpochDay = watchDateEpochDay,
                     personalRating = personalRating,
-                    notes = notes,
+                    watchMethod = watchMethod,
                     currentSeason =
                         selectedEpisode?.seasonNumber,
                     currentEpisode =
@@ -273,7 +389,8 @@ class SearchViewModel(
                     totalEpisodes =
                         uiState.value
                             .tvDetails
-                            ?.numberOfEpisodes
+                            ?.numberOfEpisodes,
+                    runtimeMinutes = movieRuntime
                 )
 
                 if (
@@ -342,7 +459,59 @@ class SearchViewModel(
         tvDetailsJob?.cancel()
         seasonJob?.cancel()
 
-        uiState.value = SearchUiState()
+        uiState.value = uiState.value.copy(
+            query = "",
+            isLoading = false,
+            results = emptyList(),
+            errorMessage = null,
+            hasSearched = false,
+            saveMessage = null,
+            saveErrorMessage = null,
+            lastSavedItemKey = null,
+            tvDetails = null,
+            seasonDetails = null,
+            isLoadingTvDetails = false,
+            isLoadingSeason = false,
+            tvDetailsErrorMessage = null,
+            mediaFilter = SearchMediaFilter.ALL,
+            yearFilter = null,
+            languageFilter = null
+        )
+    }
+
+    fun clearRecentSearches() {
+        preferences.edit()
+            .remove("recent_queries")
+            .apply()
+
+        uiState.value = uiState.value.copy(
+            recentSearches = emptyList()
+        )
+    }
+
+    private fun saveRecentSearch(query: String) {
+        val updated = listOf(query) + loadRecentSearches()
+            .filterNot { existing ->
+                existing.equals(query, ignoreCase = true)
+            }
+
+        preferences.edit()
+            .putString(
+                "recent_queries",
+                updated.take(6).joinToString("\u001F")
+            )
+            .apply()
+    }
+
+    private fun loadRecentSearches(): List<String> {
+        return preferences.getString(
+            "recent_queries",
+            null
+        )
+            ?.split("\u001F")
+            ?.filter { query -> query.isNotBlank() }
+            ?.take(6)
+            ?: emptyList()
     }
 
     override fun onCleared() {

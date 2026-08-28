@@ -27,11 +27,14 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sabir.watchtracker.data.local.LibraryItem
 import com.sabir.watchtracker.ui.library.HomeScreen
+import com.sabir.watchtracker.ui.library.HistoryScreen
 import com.sabir.watchtracker.ui.library.LibraryItemDetailScreen
 import com.sabir.watchtracker.ui.library.LibraryScreen
 import com.sabir.watchtracker.ui.library.LibraryViewModel
+import com.sabir.watchtracker.ui.library.ListsScreen
 import com.sabir.watchtracker.ui.library.StatisticsScreen
 import com.sabir.watchtracker.ui.search.SearchScreen
+import com.sabir.watchtracker.ui.settings.SettingsScreen
 
 private val AppBackground = Color(0xFF090B10)
 private val AppSurface = Color(0xFF12151D)
@@ -71,12 +74,23 @@ private fun WatchTrackerApp(
     libraryViewModel: LibraryViewModel = viewModel()
 ) {
     val libraryUiState by libraryViewModel.uiState
+    val backupUiState by libraryViewModel.backupUiState
+    val upNextUiState by libraryViewModel.upNextUiState
+    val dataHealthUiState by libraryViewModel.dataHealthUiState
 
     var selectedTab by remember {
         mutableIntStateOf(0)
     }
 
     var searchIsOpen by remember {
+        mutableStateOf(false)
+    }
+
+    var settingsIsOpen by remember {
+        mutableStateOf(false)
+    }
+
+    var historyIsOpen by remember {
         mutableStateOf(false)
     }
 
@@ -87,6 +101,8 @@ private fun WatchTrackerApp(
     BackHandler(
         enabled = selectedLibraryItem != null ||
             searchIsOpen ||
+            settingsIsOpen ||
+            historyIsOpen ||
             selectedTab != 0
     ) {
         when {
@@ -96,6 +112,14 @@ private fun WatchTrackerApp(
 
             searchIsOpen -> {
                 searchIsOpen = false
+            }
+
+            settingsIsOpen -> {
+                settingsIsOpen = false
+            }
+
+            historyIsOpen -> {
+                historyIsOpen = false
             }
 
             selectedTab != 0 -> {
@@ -108,6 +132,7 @@ private fun WatchTrackerApp(
         NavigationItem("Home", "⌂"),
         NavigationItem("Movies", "▶"),
         NavigationItem("TV Shows", "▣"),
+        NavigationItem("Lists", "☷"),
         NavigationItem("Stats", "◉")
     )
 
@@ -119,12 +144,48 @@ private fun WatchTrackerApp(
                 item = selectedLibraryItem!!,
                 onBackClick = {
                     selectedLibraryItem = null
+                },
+                onDelete = {
+                    selectedLibraryItem?.let(libraryViewModel::deleteItem)
+                    selectedLibraryItem = null
                 }
             )
         } else if (searchIsOpen) {
             SearchScreen(
                 onBackClick = {
                     searchIsOpen = false
+                }
+            )
+        } else if (settingsIsOpen) {
+            SettingsScreen(
+                libraryUiState = libraryUiState,
+                backupUiState = backupUiState,
+                dataHealthUiState = dataHealthUiState,
+                onBackClick = {
+                    settingsIsOpen = false
+                },
+                onExportBackup = libraryViewModel::exportBackup,
+                onExportCsv = libraryViewModel::exportHistoryCsv,
+                onInspectBackup = libraryViewModel::inspectBackup,
+                onRestoreBackup = libraryViewModel::restoreBackup,
+                onRestoreSafetyBackup =
+                    libraryViewModel::restoreSafetyBackup,
+                onDismissBackupPreview =
+                    libraryViewModel::dismissBackupPreview,
+                onClearBackupMessage =
+                    libraryViewModel::clearBackupMessage,
+                onClearAllData = libraryViewModel::clearAllData,
+                onRunHealthCheck = libraryViewModel::runDataHealthCheck,
+                onRepairData = libraryViewModel::repairDataHealth
+            )
+        } else if (historyIsOpen) {
+            HistoryScreen(
+                state = libraryUiState,
+                onBackClick = {
+                    historyIsOpen = false
+                },
+                onItemClick = { item ->
+                    selectedLibraryItem = item
                 }
             )
         } else {
@@ -176,9 +237,26 @@ private fun WatchTrackerApp(
                         HomeScreen(
                             paddingValues = innerPadding,
                             libraryUiState = libraryUiState,
+                            upNextUiState = upNextUiState,
                             onSearchClick = {
                                 searchIsOpen = true
                             },
+                            onSettingsClick = {
+                                settingsIsOpen = true
+                            },
+                            onHistoryClick = {
+                                historyIsOpen = true
+                            },
+                            onMoviesClick = {
+                                selectedTab = 1
+                            },
+                            onTvShowsClick = {
+                                selectedTab = 2
+                            },
+                            onMarkUpNextWatched =
+                                libraryViewModel::markUpNextWatched,
+                            onRetryUpNext =
+                                libraryViewModel::retryUpNext,
                             onItemClick = { item ->
                                 selectedLibraryItem = item
                             }
@@ -190,7 +268,9 @@ private fun WatchTrackerApp(
                             paddingValues = innerPadding,
                             title = "Movies",
                             items = libraryUiState.movies,
+                            episodeWatches = libraryUiState.episodeWatches,
                             isLoading = libraryUiState.isLoading,
+                            onBackClick = { selectedTab = 0 },
                             onAddClick = {
                                 searchIsOpen = true
                             },
@@ -205,7 +285,9 @@ private fun WatchTrackerApp(
                             paddingValues = innerPadding,
                             title = "TV Shows",
                             items = libraryUiState.tvShows,
+                            episodeWatches = libraryUiState.episodeWatches,
                             isLoading = libraryUiState.isLoading,
+                            onBackClick = { selectedTab = 0 },
                             onAddClick = {
                                 searchIsOpen = true
                             },
@@ -215,10 +297,27 @@ private fun WatchTrackerApp(
                         )
                     }
 
+                    3 -> {
+                        ListsScreen(
+                            paddingValues = innerPadding,
+                            state = libraryUiState,
+                            onBackClick = { selectedTab = 0 },
+                            onCreateList = libraryViewModel::createCustomList,
+                            onUpdateList = libraryViewModel::updateCustomList,
+                            onDuplicateList = libraryViewModel::duplicateCustomList,
+                            onDeleteList = libraryViewModel::deleteCustomList,
+                            onAddItem = libraryViewModel::addToCustomList,
+                            onAddSearchResult = libraryViewModel::addSearchResultToCustomList,
+                            onRemoveItem = libraryViewModel::removeFromCustomList,
+                            onItemClick = { item -> selectedLibraryItem = item }
+                        )
+                    }
+
                     else -> {
                         StatisticsScreen(
                             paddingValues = innerPadding,
-                            libraryUiState = libraryUiState
+                            libraryUiState = libraryUiState,
+                            onBackClick = { selectedTab = 0 }
                         )
                     }
                 }

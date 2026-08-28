@@ -1,6 +1,7 @@
 ﻿package com.sabir.watchtracker.data.local
 
 import androidx.room.Entity
+import com.sabir.watchtracker.BuildConfig
 
 @Entity(
     tableName = "library_items",
@@ -26,6 +27,11 @@ data class LibraryItem(
     val currentEpisode: Int?,
     val totalSeasons: Int?,
     val totalEpisodes: Int?,
+    val runtimeMinutes: Int?,
+    val genreNames: String? = null,
+    val watchMethod: String? = null,
+    val originalTitle: String? = null,
+    val originalLanguage: String? = null,
     val addedAt: Long,
     val updatedAt: Long
 ) {
@@ -44,13 +50,20 @@ data class LibraryItem(
 
     val posterUrl: String?
         get() = posterPath?.let { path ->
-            "https://image.tmdb.org/t/p/w500$path"
+            "${BuildConfig.TMDB_PROXY_BASE_URL.trimEnd('/')}/image/t/p/w500$path"
         }
 
     val backdropUrl: String?
         get() = backdropPath?.let { path ->
-            "https://image.tmdb.org/t/p/w780$path"
+            "${BuildConfig.TMDB_PROXY_BASE_URL.trimEnd('/')}/image/t/p/w780$path"
         }
+
+    val genres: List<String>
+        get() = genreNames
+            ?.split("|")
+            ?.map { value -> value.trim() }
+            ?.filter { value -> value.isNotBlank() }
+            .orEmpty()
 
     val episodeProgressText: String?
         get() {

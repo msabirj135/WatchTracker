@@ -1,6 +1,7 @@
 ﻿package com.sabir.watchtracker.data.remote
 
 import com.google.gson.annotations.SerializedName
+import com.sabir.watchtracker.BuildConfig
 
 data class TmdbTvDetails(
     @SerializedName("id")
@@ -27,11 +28,23 @@ data class TmdbTvDetails(
     @SerializedName("status")
     val productionStatus: String = "",
 
+    @SerializedName("in_production")
+    val inProduction: Boolean = false,
+
+    @SerializedName("next_episode_to_air")
+    val nextEpisodeToAir: TmdbEpisode? = null,
+
+    @SerializedName("last_episode_to_air")
+    val lastEpisodeToAir: TmdbEpisode? = null,
+
     @SerializedName("number_of_seasons")
     val numberOfSeasons: Int = 0,
 
     @SerializedName("number_of_episodes")
     val numberOfEpisodes: Int = 0,
+
+    @SerializedName("genres")
+    val genres: List<TmdbGenre> = emptyList(),
 
     @SerializedName("seasons")
     val seasons: List<TmdbSeasonSummary> = emptyList()
@@ -128,6 +141,21 @@ data class TmdbEpisode(
 
     val stillUrl: String?
         get() = stillPath?.let { path ->
-            "https://image.tmdb.org/t/p/w500$path"
+            "${BuildConfig.TMDB_PROXY_BASE_URL.trimEnd('/')}/image/t/p/w500$path"
         }
+
+    val parsedAirDate: java.time.LocalDate?
+        get() = airDate
+            ?.takeIf { value -> value.isNotBlank() }
+            ?.let { value ->
+                runCatching {
+                    java.time.LocalDate.parse(value)
+                }.getOrNull()
+            }
+
+    val hasAired: Boolean
+        get() = parsedAirDate
+            ?.isAfter(java.time.LocalDate.now())
+            ?.not()
+            ?: true
 }

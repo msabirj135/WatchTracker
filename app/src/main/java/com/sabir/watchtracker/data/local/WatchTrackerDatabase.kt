@@ -11,9 +11,13 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 @Database(
     entities = [
         LibraryItem::class,
-        EpisodeWatch::class
+        EpisodeWatch::class,
+        CustomList::class,
+        CustomListItem::class,
+        RewatchRecord::class,
+        ContinueWatchingCache::class
     ],
-    version = 2,
+    version = 11,
     exportSchema = false
 )
 @TypeConverters(
@@ -24,6 +28,12 @@ abstract class WatchTrackerDatabase : RoomDatabase() {
     abstract fun libraryItemDao(): LibraryItemDao
 
     abstract fun episodeWatchDao(): EpisodeWatchDao
+
+    abstract fun customListDao(): CustomListDao
+
+    abstract fun rewatchRecordDao(): RewatchRecordDao
+
+    abstract fun continueWatchingCacheDao(): ContinueWatchingCacheDao
 
     companion object {
 
@@ -71,6 +81,127 @@ abstract class WatchTrackerDatabase : RoomDatabase() {
             }
         }
 
+        private val migration2To3 = object : Migration(
+            startVersion = 2,
+            endVersion = 3
+        ) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE library_items ADD COLUMN runtimeMinutes INTEGER"
+                )
+            }
+        }
+
+        private val migration3To4 = object : Migration(3, 4) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "CREATE TABLE IF NOT EXISTS custom_lists (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, name TEXT NOT NULL, description TEXT NOT NULL, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL)"
+                )
+                database.execSQL(
+                    "CREATE TABLE IF NOT EXISTS custom_list_items (listId INTEGER NOT NULL, tmdbId INTEGER NOT NULL, mediaType TEXT NOT NULL, addedAt INTEGER NOT NULL, PRIMARY KEY(listId, tmdbId, mediaType))"
+                )
+            }
+        }
+
+        private val migration4To5 = object : Migration(4, 5) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "CREATE TABLE IF NOT EXISTS rewatch_records (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, tmdbId INTEGER NOT NULL, mediaType TEXT NOT NULL, seasonNumber INTEGER, episodeNumber INTEGER, episodeName TEXT NOT NULL, watchedDateEpochDay INTEGER NOT NULL, runtimeMinutes INTEGER, createdAt INTEGER NOT NULL)"
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_rewatch_records_tmdbId_mediaType ON rewatch_records (tmdbId, mediaType)"
+                )
+            }
+        }
+
+        private val migration5To6 = object : Migration(5, 6) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE library_items ADD COLUMN genreNames TEXT"
+                )
+            }
+        }
+
+        private val migration6To7 = object : Migration(6, 7) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE custom_lists ADD COLUMN colorKey TEXT"
+                )
+                database.execSQL(
+                    "ALTER TABLE custom_lists ADD COLUMN iconKey TEXT"
+                )
+            }
+        }
+
+        private val migration7To8 = object : Migration(7, 8) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE library_items ADD COLUMN watchMethod TEXT"
+                )
+                database.execSQL(
+                    "ALTER TABLE rewatch_records ADD COLUMN watchMethod TEXT"
+                )
+            }
+        }
+
+        private val migration8To9 = object : Migration(8, 9) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE library_items ADD COLUMN originalTitle TEXT"
+                )
+                database.execSQL(
+                    "ALTER TABLE library_items ADD COLUMN originalLanguage TEXT"
+                )
+            }
+        }
+
+        private val migration9To10 = object : Migration(9, 10) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE custom_list_items ADD COLUMN title TEXT")
+                database.execSQL("ALTER TABLE custom_list_items ADD COLUMN overview TEXT")
+                database.execSQL("ALTER TABLE custom_list_items ADD COLUMN posterPath TEXT")
+                database.execSQL("ALTER TABLE custom_list_items ADD COLUMN backdropPath TEXT")
+                database.execSQL("ALTER TABLE custom_list_items ADD COLUMN releaseDate TEXT")
+                database.execSQL("ALTER TABLE custom_list_items ADD COLUMN originalTitle TEXT")
+                database.execSQL("ALTER TABLE custom_list_items ADD COLUMN originalLanguage TEXT")
+                database.execSQL("ALTER TABLE custom_list_items ADD COLUMN tmdbRating REAL")
+            }
+        }
+
+        private val migration10To11 = object : Migration(10, 11) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS continue_watching_cache (
+                        tmdbShowId INTEGER NOT NULL,
+                        nextEpisodeId INTEGER,
+                        nextEpisodeName TEXT,
+                        nextEpisodeOverview TEXT,
+                        nextSeasonNumber INTEGER,
+                        nextEpisodeNumber INTEGER,
+                        nextAirDate TEXT,
+                        nextRuntimeMinutes INTEGER,
+                        nextStillPath TEXT,
+                        nextVoteAverage REAL,
+                        upcomingEpisodeId INTEGER,
+                        upcomingEpisodeName TEXT,
+                        upcomingEpisodeOverview TEXT,
+                        upcomingSeasonNumber INTEGER,
+                        upcomingEpisodeNumber INTEGER,
+                        upcomingAirDate TEXT,
+                        upcomingRuntimeMinutes INTEGER,
+                        upcomingStillPath TEXT,
+                        upcomingVoteAverage REAL,
+                        productionStatus TEXT NOT NULL,
+                        sourceUpdatedAt INTEGER NOT NULL,
+                        fetchedAt INTEGER NOT NULL,
+                        PRIMARY KEY(tmdbShowId)
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+
         @Volatile
         private var instance: WatchTrackerDatabase? = null
 
@@ -83,7 +214,18 @@ abstract class WatchTrackerDatabase : RoomDatabase() {
                     WatchTrackerDatabase::class.java,
                     DATABASE_NAME
                 )
-                    .addMigrations(migration1To2)
+                    .addMigrations(
+                        migration1To2,
+                        migration2To3,
+                        migration3To4,
+                        migration4To5,
+                        migration5To6,
+                        migration6To7,
+                        migration7To8,
+                        migration8To9,
+                        migration9To10,
+                        migration10To11
+                    )
                     .build()
                     .also { database ->
                         instance = database

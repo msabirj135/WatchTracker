@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.sabir.watchtracker.data.local.EpisodeWatch
 import com.sabir.watchtracker.data.local.LibraryItem
+import com.sabir.watchtracker.data.local.RewatchRecord
 import com.sabir.watchtracker.data.remote.TmdbEpisode
 import com.sabir.watchtracker.data.remote.TmdbSeasonDetails
 import com.sabir.watchtracker.data.remote.TmdbTvDetails
@@ -22,6 +23,7 @@ data class LibraryDetailUiState(
     val tvDetails: TmdbTvDetails? = null,
     val seasons: List<TmdbSeasonDetails> = emptyList(),
     val episodeWatches: List<EpisodeWatch> = emptyList(),
+    val rewatchRecords: List<RewatchRecord> = emptyList(),
     val isLoading: Boolean = false,
     val isSaving: Boolean = false,
     val errorMessage: String? = null
@@ -45,6 +47,12 @@ data class LibraryDetailUiState(
     val watchedCount: Int
         get() = episodeWatches.size
 
+    val airedEpisodes: List<TmdbEpisode>
+        get() = allEpisodes.filter { episode -> episode.hasAired }
+
+    val availableEpisodeCount: Int
+        get() = airedEpisodes.size
+
     val totalEpisodeCount: Int
         get() = allEpisodes.size
             .takeIf { count -> count > 0 }
@@ -59,10 +67,19 @@ data class LibraryDetailUiState(
         }
 
     val nextEpisode: TmdbEpisode?
-        get() = allEpisodes.firstOrNull { episode ->
+        get() = airedEpisodes.firstOrNull { episode ->
             (episode.seasonNumber to episode.episodeNumber) !in
                 watchedEpisodeKeys
         }
+
+    val nextUpcomingEpisode: TmdbEpisode?
+        get() = allEpisodes
+            .filter { episode -> !episode.hasAired }
+            .sortedBy { episode -> episode.parsedAirDate }
+            .firstOrNull()
+
+    val isCaughtUp: Boolean
+        get() = episodeWatches.isNotEmpty() && nextEpisode == null
 }
 
 class LibraryDetailViewModel(
@@ -76,6 +93,7 @@ class LibraryDetailViewModel(
     private val tmdbRepository = TmdbRepository()
 
     private var episodeObservationJob: Job? = null
+    private var rewatchObservationJob: Job? = null
     private var loadedItemKey: String? = null
 
     var uiState = mutableStateOf(
@@ -95,15 +113,31 @@ class LibraryDetailViewModel(
 
         loadedItemKey = itemKey
         episodeObservationJob?.cancel()
+        rewatchObservationJob?.cancel()
 
         uiState.value = LibraryDetailUiState(
             item = item,
             isLoading = item.mediaType == "tv"
         )
 
+        observeRewatches(item)
+
         if (item.mediaType == "tv") {
             observeEpisodes(item.tmdbId)
             loadTvDetails(item)
+        }
+    }
+
+    private fun observeRewatches(item: LibraryItem) {
+        rewatchObservationJob = viewModelScope.launch {
+            libraryRepository.observeRewatches(
+                tmdbId = item.tmdbId,
+                mediaType = item.mediaType
+            ).collect { records ->
+                uiState.value = uiState.value.copy(
+                    rewatchRecords = records
+                )
+            }
         }
     }
 
@@ -148,6 +182,12 @@ class LibraryDetailViewModel(
                     }
                 )
 
+                libraryRepository.updateGenres(
+                    tmdbId = item.tmdbId,
+                    mediaType = "tv",
+                    genreNames = details.genres.map { genre -> genre.name }
+                )
+
                 libraryRepository.synchronizeTvProgress(
                     tmdbShowId = item.tmdbId
                 )
@@ -168,6 +208,18 @@ class LibraryDetailViewModel(
                 )
             }
         }
+    }
+
+    fun retryLoadTvDetails() {
+        val item = uiState.value.item
+            ?.takeIf { current -> current.mediaType == "tv" }
+            ?: return
+
+        uiState.value = uiState.value.copy(
+            isLoading = true,
+            errorMessage = null
+        )
+        loadTvDetails(item)
     }
 
     fun markEpisodeWatched(
@@ -205,6 +257,68 @@ class LibraryDetailViewModel(
             episode = nextEpisode,
             watchedDateEpochDay = LocalDate.now().toEpochDay()
         )
+    }
+
+    fun markSeriesCompleted() {
+        val state = uiState.value
+        val show = state.item ?: return
+        val remainingEpisodes = state.airedEpisodes.filter { episode ->
+            (episode.seasonNumber to episode.episodeNumber) !in
+                state.watchedEpisodeKeys
+        }
+
+        if (remainingEpisodes.isEmpty()) return
+
+        viewModelScope.launch {
+            setSaving(true)
+            try {
+                libraryRepository.markEpisodesWatched(
+                    show = show,
+                    episodes = remainingEpisodes,
+                    watchedDateEpochDay = LocalDate.now().toEpochDay()
+                )
+                refreshItem()
+                setSaving(false)
+            } catch (exception: Exception) {
+                setError(
+                    exception.message
+                        ?: "Unable to mark this series completed."
+                )
+            }
+        }
+    }
+
+    fun markSeasonWatched(
+        season: TmdbSeasonDetails,
+        watchedDateEpochDay: Long
+    ) {
+        val state = uiState.value
+        val show = state.item ?: return
+        val remainingEpisodes = season.episodes.filter { episode ->
+            episode.hasAired &&
+                (episode.seasonNumber to episode.episodeNumber) !in
+                    state.watchedEpisodeKeys
+        }
+
+        if (remainingEpisodes.isEmpty()) return
+
+        viewModelScope.launch {
+            setSaving(true)
+            try {
+                libraryRepository.markEpisodesWatched(
+                    show = show,
+                    episodes = remainingEpisodes,
+                    watchedDateEpochDay = watchedDateEpochDay
+                )
+                refreshItem()
+                setSaving(false)
+            } catch (exception: Exception) {
+                setError(
+                    exception.message
+                        ?: "Unable to mark this season watched."
+                )
+            }
+        }
     }
 
     fun unmarkEpisodeWatched(
@@ -253,6 +367,112 @@ class LibraryDetailViewModel(
                 setError(
                     exception.message
                         ?: "Unable to update the watched date."
+                )
+            }
+        }
+    }
+
+    fun addMovieRewatch(watchedDateEpochDay: Long, watchMethod: String) {
+        val movie = uiState.value.item ?: return
+
+        viewModelScope.launch {
+            setSaving(true)
+            try {
+                libraryRepository.addMovieRewatch(
+                    movie = movie,
+                    watchedDateEpochDay = watchedDateEpochDay,
+                    watchMethod = watchMethod
+                )
+                refreshItem()
+                setSaving(false)
+            } catch (exception: Exception) {
+                setError(
+                    exception.message ?: "Unable to save this rewatch."
+                )
+            }
+        }
+    }
+
+    fun updateMovieWatchMethod(watchMethod: String) {
+        val movie = uiState.value.item ?: return
+        viewModelScope.launch {
+            setSaving(true)
+            try {
+                libraryRepository.updateMovieWatchMethod(movie, watchMethod)
+                refreshItem()
+                setSaving(false)
+            } catch (exception: Exception) {
+                setError(exception.message ?: "Unable to update the watch method.")
+            }
+        }
+    }
+
+    fun updateMovieRewatchMethod(recordId: Long, watchMethod: String) {
+        viewModelScope.launch {
+            setSaving(true)
+            try {
+                libraryRepository.updateMovieRewatchMethod(recordId, watchMethod)
+                setSaving(false)
+            } catch (exception: Exception) {
+                setError(exception.message ?: "Unable to update this rewatch.")
+            }
+        }
+    }
+
+    fun addEpisodeRewatch(
+        episode: TmdbEpisode,
+        watchedDateEpochDay: Long
+    ) {
+        val show = uiState.value.item ?: return
+
+        viewModelScope.launch {
+            setSaving(true)
+            try {
+                libraryRepository.addEpisodeRewatch(
+                    show = show,
+                    episode = episode,
+                    watchedDateEpochDay = watchedDateEpochDay
+                )
+                refreshItem()
+                setSaving(false)
+            } catch (exception: Exception) {
+                setError(
+                    exception.message ?: "Unable to save this episode rewatch."
+                )
+            }
+        }
+    }
+
+    fun deleteRewatch(recordId: Long) {
+        viewModelScope.launch {
+            setSaving(true)
+            try {
+                libraryRepository.deleteRewatch(recordId)
+                setSaving(false)
+            } catch (exception: Exception) {
+                setError(
+                    exception.message ?: "Unable to remove this rewatch."
+                )
+            }
+        }
+    }
+
+    fun updatePersonalRating(rating: Double?) {
+        val item = uiState.value.item ?: return
+
+        viewModelScope.launch {
+            setSaving(true)
+
+            try {
+                libraryRepository.updateItem(
+                    item.copy(personalRating = rating)
+                )
+                refreshItem()
+                setSaving(false)
+            } catch (exception: Exception) {
+                setError(
+                    exception.message
+                        ?: "Unable to update your rating."
                 )
             }
         }

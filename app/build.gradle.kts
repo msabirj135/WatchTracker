@@ -10,10 +10,16 @@ val localProperties = Properties().apply {
     }
 }
 
-val tmdbAccessToken = localProperties.getProperty(
-    "TMDB_ACCESS_TOKEN",
-    ""
-)
+val tmdbProxyBaseUrl = localProperties
+    .getProperty("TMDB_PROXY_BASE_URL", "")
+    .trim()
+    .trimEnd('/')
+    .takeIf { it.isNotBlank() }
+    ?: "https://watchtracker-proxy-not-configured.invalid"
+
+val watchTrackerAppKey = localProperties
+    .getProperty("WATCHTRACKER_APP_KEY", "")
+    .trim()
 
 plugins {
     alias(libs.plugins.android.application)
@@ -29,15 +35,33 @@ android {
         applicationId = "com.sabir.watchtracker"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField(
             type = "String",
-            name = "TMDB_ACCESS_TOKEN",
-            value = "\"$tmdbAccessToken\""
+            name = "TMDB_PROXY_BASE_URL",
+            value = "\"$tmdbProxyBaseUrl\""
+        )
+
+        buildConfigField(
+            type = "String",
+            name = "WATCHTRACKER_APP_KEY",
+            value = "\"$watchTrackerAppKey\""
+        )
+
+        buildConfigField(
+            type = "int",
+            name = "DATABASE_SCHEMA_VERSION",
+            value = "11"
+        )
+
+        buildConfigField(
+            type = "String",
+            name = "RELEASE_CHANNEL",
+            value = "\"Personal\""
         )
     }
 
@@ -70,6 +94,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation("androidx.lifecycle:lifecycle-process:2.11.0")
 
     implementation(libs.retrofit.core)
     implementation(libs.retrofit.converter.gson)

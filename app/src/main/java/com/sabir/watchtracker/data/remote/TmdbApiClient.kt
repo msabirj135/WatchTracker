@@ -7,8 +7,6 @@ import okhttp3.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
-private const val TMDB_BASE_URL = "https://api.themoviedb.org/"
-
 object TmdbApiClient {
 
     private val authenticationInterceptor = Interceptor { chain ->
@@ -16,8 +14,8 @@ object TmdbApiClient {
             .request()
             .newBuilder()
             .header(
-                name = "Authorization",
-                value = "Bearer ${BuildConfig.TMDB_ACCESS_TOKEN}"
+                name = "X-WatchTracker-Key",
+                value = BuildConfig.WATCHTRACKER_APP_KEY
             )
             .header(
                 name = "Accept",
@@ -36,7 +34,9 @@ object TmdbApiClient {
 
     private val retrofit: Retrofit by lazy {
         Retrofit.Builder()
-            .baseUrl(TMDB_BASE_URL)
+            .baseUrl(
+                "${BuildConfig.TMDB_PROXY_BASE_URL.trimEnd('/')}/"
+            )
             .client(httpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()

@@ -8,6 +8,9 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface EpisodeWatchDao {
 
+    @Query("SELECT * FROM episode_watches")
+    suspend fun getAllSnapshot(): List<EpisodeWatch>
+
     @Query(
         """
         SELECT *
@@ -23,6 +26,14 @@ interface EpisodeWatchDao {
     suspend fun upsert(
         episodeWatch: EpisodeWatch
     )
+
+    @Upsert
+    suspend fun upsertAll(
+        episodeWatches: List<EpisodeWatch>
+    )
+
+    @Query("DELETE FROM episode_watches")
+    suspend fun deleteAll()
 
     @Query(
         """
@@ -122,4 +133,7 @@ interface EpisodeWatchDao {
     suspend fun deleteForShow(
         tmdbShowId: Int
     )
+
+    @Query("DELETE FROM episode_watches WHERE tmdbShowId NOT IN (SELECT tmdbId FROM library_items WHERE mediaType = 'tv')")
+    suspend fun deleteOrphanWatches(): Int
 }

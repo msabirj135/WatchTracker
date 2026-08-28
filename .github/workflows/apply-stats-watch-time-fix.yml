@@ -1,0 +1,55 @@
+name: Apply Stats Watch Time Fix
+
+on:
+  push:
+    branches:
+      - agent/improve-stats-watch-time
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Apply compact Stats watch-time formatting
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('app/src/main/java/com/sabir/watchtracker/ui/library/LibraryScreens.kt')
+          text = path.read_text(encoding='utf-8-sig')
+
+          replacements = {
+              'value = formatWatchTime(state.theatreWatchMinutes),':
+                  'value = formatWatchHours(state.theatreWatchMinutes),',
+              'value = formatWatchTime(summary.totalMinutes),':
+                  'value = formatWatchHours(summary.totalMinutes),',
+          }
+
+          changed = False
+          for old, new in replacements.items():
+              if old in text:
+                  text = text.replace(old, new, 1)
+                  changed = True
+
+          if not changed:
+              raise SystemExit('Stats watch-time formatting is already fixed.')
+
+          path.write_text(text, encoding='utf-8-sig', newline='')
+          PY
+
+      - name: Commit changes
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/src/main/java/com/sabir/watchtracker/ui/library/LibraryScreens.kt
+          git diff --cached --quiet && exit 0
+          git commit -m 'Use compact watch time in Stats summary cards'
+          git push
