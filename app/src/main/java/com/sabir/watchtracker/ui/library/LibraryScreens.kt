@@ -140,6 +140,54 @@ fun HomeScreen(
             )
         }
 
+
+        item {
+            SectionHeader(
+                title = "Watch history",
+                action = "See all",
+                onActionClick = onHistoryClick
+            )
+        }
+
+        if (libraryUiState.isLoading) {
+            item {
+                LoadingBlock()
+            }
+        } else if (
+            libraryUiState.watchHistoryEntries.isEmpty()
+        ) {
+            item {
+                EmptyHistoryCard(
+                    onSearchClick = onSearchClick
+                )
+            }
+        } else {
+            item {
+                LazyRow(
+                    horizontalArrangement =
+                        Arrangement.spacedBy(14.dp),
+                    contentPadding = PaddingValues(
+                        horizontal = 20.dp
+                    )
+                ) {
+                    items(
+                        items = libraryUiState
+                            .watchHistoryEntries
+                            .take(10),
+                        key = { entry ->
+                            entry.key
+                        }
+                    ) { entry ->
+                        HistoryCard(
+                            entry = entry,
+                            onClick = {
+                                onItemClick(entry.item)
+                            }
+                        )
+                    }
+                }
+            }
+        }
         if (
             libraryUiState.continueWatching.isNotEmpty() ||
             upNextUiState.isLoading ||
@@ -170,14 +218,14 @@ fun HomeScreen(
 
             when {
                 upNextUiState.isLoading &&
-                    upNextUiState.entries.isEmpty() -> {
+                        upNextUiState.entries.isEmpty() -> {
                     item {
                         LoadingBlock()
                     }
                 }
 
                 upNextUiState.errorMessage != null &&
-                    upNextUiState.entries.isEmpty() -> {
+                        upNextUiState.entries.isEmpty() -> {
                     item {
                         UpNextErrorCard(
                             message = upNextUiState.errorMessage,
@@ -187,7 +235,7 @@ fun HomeScreen(
                 }
 
                 upNextUiState.entries.isEmpty() &&
-                    upNextUiState.upcomingEntries.isEmpty() -> {
+                        upNextUiState.upcomingEntries.isEmpty() -> {
                     item {
                         UpNextCaughtUpCard()
                     }
@@ -215,7 +263,7 @@ fun HomeScreen(
                                 UpNextCard(
                                     entry = entry,
                                     isSaving = entry.item.tmdbId in
-                                        upNextUiState.savingShowIds,
+                                            upNextUiState.savingShowIds,
                                     onOpenShow = {
                                         onItemClick(entry.item)
                                     },
@@ -269,76 +317,9 @@ fun HomeScreen(
                 }
             }
         }
-
-        item {
-            SectionHeader(
-                title = "Watch history",
-                action = "See all",
-                onActionClick = onHistoryClick
-            )
-        }
-
-        if (libraryUiState.isLoading) {
-            item {
-                LoadingBlock()
-            }
-        } else if (
-            libraryUiState.watchHistoryEntries.isEmpty()
-        ) {
-            item {
-                EmptyHistoryCard(
-                    onSearchClick = onSearchClick
-                )
-            }
-        } else {
-            item {
-                LazyRow(
-                    horizontalArrangement =
-                        Arrangement.spacedBy(14.dp),
-                    contentPadding = PaddingValues(
-                        horizontal = 20.dp
-                    )
-                ) {
-                    items(
-                        items = libraryUiState
-                            .watchHistoryEntries
-                            .take(10),
-                        key = { entry ->
-                            entry.key
-                        }
-                    ) { entry ->
-                        HistoryCard(
-                            entry = entry,
-                            onClick = {
-                                onItemClick(entry.item)
-                            }
-                        )
-                    }
-                }
-            }
-        }
-
-        item {
-            SectionHeader(
-                title = "Your library",
-                action = "${libraryUiState.totalCount} titles"
-            )
-        }
-
-        item {
-            LibraryOverview(
-                totalCount = libraryUiState.totalCount,
-                planToWatchCount =
-                    libraryUiState.planToWatchCount,
-                watchingCount =
-                    libraryUiState.watching.size,
-                completedCount =
-                    libraryUiState.completedCount,
-                onSearchClick = onSearchClick
-            )
-        }
     }
 }
+
 
 @Composable
 private fun HomeHeader(
@@ -1053,16 +1034,17 @@ private fun HistoryCard(
             ) {
                 Text(
                     text = item.title,
-                    modifier = Modifier.height(18.dp),
+                    modifier = Modifier.height(29.dp),
                     color = ScreenTextPrimary,
-                    fontSize = 15.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = 13.sp
                 )
 
                 Spacer(
-                    modifier = Modifier.height(5.dp)
+                    modifier = Modifier.height(3.dp)
                 )
 
                 Text(
